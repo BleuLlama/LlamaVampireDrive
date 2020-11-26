@@ -346,7 +346,7 @@ EOL_TRANSFORMATIONS = {
 }
 
 TRANSFORMATIONS = {
-    'llvdrv': LlamaVampireDrive,
+    #'llvdrv': LlamaVampireDrive,
     'direct': Transform,    # no transformation
     'default': NoTerminal,
     'nocontrol': NoControls,
@@ -401,6 +401,7 @@ class Miniterm(object):
         self.update_transformations()
         self.exit_character = 0x1d  # GS/CTRL+]
         self.menu_character = 0x14  # Menu: CTRL+T
+        self.llvampire_character = unichr( 0x01 ) # Vampire command CTRL+A
         self.alive = None
         self._reader_alive = None
         self.receiver_thread = None
@@ -515,22 +516,35 @@ class Miniterm(object):
         locally.
         """
         menu_active = False
+        vampire_active = False
+
         try:
             while self.alive:
+
                 try:
                     c = self.console.getkey()
                 except KeyboardInterrupt:
                     c = '\x03'
+
                 if not self.alive:
                     break
+
                 if menu_active:
                     self.handle_menu_key(c)
                     menu_active = False
                 elif c == self.menu_character:
                     menu_active = True      # next char will be for menu
+
                 elif c == self.exit_character:
                     self.stop()             # exit app
                     break
+
+                elif vampire_active:
+                    vampire_active = self.handle_vampire_key(c)
+                elif c == self.llvampire_character:
+                    vampire_active = True
+                    self.console.write( "V? " );
+
                 else:
                     #~ if self.raw:
                     text = c
@@ -545,6 +559,66 @@ class Miniterm(object):
         except:
             self.alive = False
             raise
+
+    def get_vampire_help_text(self):
+            """return the vampire help text"""
+            # help text, starts with blank line!
+            return """
+--- Vampire options:
+---
+---     ^Ah             display this help text (or ^A^H or ^AH etc)
+---     ^Aa             send CTRL-A
+---     ^Ad <int>       set per-char ms delay
+---     ^Al <string>    LOAD from the specified filename
+---     ^As <string>    SAVE to the specified filename
+""".format(version=getattr(serial, 'VERSION', 'unknown version'))
+
+
+    def handle_vampire_key( self, c ):
+
+        if c in 'hH\x08':
+            sys.stderr.write( self.get_vampire_help_text() )
+            return False
+
+        if c in 'aA\x01':
+            # vampire character again -> send itself
+            self.serial.write(self.tx_encoder.encode(c))
+            if self.echo:
+                self.console.write(c)
+            return False
+
+        if c in 'Ll':
+            print "load?"
+            fname = sys.stdin.readline().rstrip('\r\n')
+            print "Load " + fname
+            return False
+
+        if c in 'Ss':
+            print "save?"
+            fname = sys.stdin.readline().rstrip('\r\n')
+            print "Save " + fname
+            return False
+
+        if c in 'Dd':
+            print "ms?"
+            msdelay = int( sys.stdin.readline().rstrip('\r\n'))
+            if msdelay < 0 or msdelay > 1000:
+                print "ERROR: Out of range (0..1000)"
+                return False
+            print "set(ms, {})".format( msdelay )
+            return False
+
+
+        if c in '\x0a\x0d':
+            return False
+            
+        print "ERROR: Unknown char: {} {}".format( hex(ord(c)), c )
+
+
+        # returning false returns control to terminal operations
+        return False
+
+
 
     def handle_menu_key(self, c):
         """Implement a simple menu / settings"""
@@ -946,7 +1020,8 @@ def main(default_port=None, default_baudrate=115200, default_rts=None, default_d
             sys.exit(1)
         filters = args.filter
     else:
-        filters = ['llvdrv'] #'default']
+        filters = ['default']
+        #filters = ['llvdrv']
 
     while True:
         # no port given on command line -> ask user now
