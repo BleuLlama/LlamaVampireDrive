@@ -31,6 +31,12 @@ import serial
 from serial.tools.list_ports import comports
 from serial.tools import hexlify_codec
 
+import time         # for sleep
+from GS_Timing import millis, delay
+from os import walk # directory listing
+
+
+
 # pylint: disable=wrong-import-order,wrong-import-position
 
 codecs.register(lambda c: hexlify_codec.getregentry() if c == 'hexlify' else None)
@@ -309,27 +315,107 @@ class LlamaVampireDrive( Transform ):
         sys.stderr.flush()
         self.mode = 'THRU'
 
+        self.capturing = False
+        self.filepath = '../BASIC/'
+        self.save_filename = 'saved.bas'
+        self.captureForSAVE = False
+        self.skipLIST = False
+        self.save_fh = False
+        self.accumulator = ''
+        self.msdelay = 10 # seems ok
+        self.passthru = True
+
+    def setMsDelay( self, value ):
+        self.msdelay = value
+        return value
+
+    def getMsDelay( self ):
+        return self.msdelay
+
+    def getVersion( self ):
+        return "LlamaVampireDrive - (Miniterm Transform) v1.0"
+
+    def getFilePath( self ):
+        return self.filepath
+
+    def getSaveFilename( self ):
+        return self.save_filename
+
+    def setSaveFilename( self, filename ):
+        if filename == "":
+            return false
+
+        self.save_filename = filename
+        return filename
+
+    def endCapture( self ):
+        self.save_fh.close()
+        self.capturing = False
+        print "\n\r" + self.save_filename + ": Save comple."
+
+    def internal_startCapture( self ):
+        self.save_fh = open( self.getFilePath() + self.save_filename, 'w' )
+        self.capturing = True
+
+    def startCapture( self ):
+        self.captureUntilOk = False
+        self.internal_startCapture()
+        print "\n\r" + self.save_filename + ": Saving..."
+
+    def startCaptureForSave( self ):
+        self.captureForSAVE = True
+        self.internal_startCapture()
+        print "\n\r" + self.save_filename + ": Saving until 'Ok'"
+
+
     def echo(self, text):
         """text to be sent but displayed on console"""
         return text
 
     def rx(self, text):
         """text received from serial port"""
-        self.e
-        return text
+
+        # save to a file if we need to
+        if self.capturing:
+            # make sure we're doing this byte by byte..
+            for ch in text:
+                # re-accumulate it into lines:
+                if ch in "\n\r":
+                    # skip empty lines
+                    if self.accumulator == "":
+                        pass
+                    else:
+                        # do something with contented lines
+                        if self.accumulator == 'Ok':
+                            # on Ok, we're done.
+                            self.endCapture()
+                            return text # make sure we bail out of the loop.
+
+                        elif self.accumulator == 'LIST':
+                            # skip LIST lines
+                            pass
+
+                        else:
+                            # write out the accumulator line
+                            self.save_fh.write( self.accumulator )
+                            self.save_fh.write( '\x0a' )
+
+                    # and reset the accumulator
+                    self.accumulator = ''
+
+                else:
+                    # just add it to the accumulator
+                    self.accumulator = self.accumulator + ch
+
+        # pass it on...
+        if self.passthru:
+            return text
+        return ''
 
     def tx(self, text):
         """text to be sent to serial port"""
-        sys.stderr.write(' [TX:{}] '.format(repr(text)))
-        sys.stderr.flush()
-
-        for c in text:
-            if c == unichr( 0x01 ):
-                print( "COMMAND MODE." );
-                self.mode = 'COMMAND'
-            if c == unichr( 0x18 ) or c == 'x' or c == 'X':
-                print( "THRU MODE." );
-                self.mode = 'THRU'
+        #sys.stderr.write(' [TX:{}] '.format(repr(text)))
+        #sys.stderr.flush()
 
         return text
 
@@ -346,7 +432,7 @@ EOL_TRANSFORMATIONS = {
 }
 
 TRANSFORMATIONS = {
-    #'llvdrv': LlamaVampireDrive,
+    'llvdrv': LlamaVampireDrive,
     'direct': Transform,    # no transformation
     'default': NoTerminal,
     'nocontrol': NoControls,
@@ -401,12 +487,13 @@ class Miniterm(object):
         self.update_transformations()
         self.exit_character = 0x1d  # GS/CTRL+]
         self.menu_character = 0x14  # Menu: CTRL+T
-        self.llvampire_character = unichr( 0x01 ) # Vampire command CTRL+A
         self.alive = None
         self._reader_alive = None
         self.receiver_thread = None
         self.rx_decoder = None
         self.tx_decoder = None
+
+        self.llvampire_character = unichr( 0x01 ) # Vampire command CTRL+A
 
     def _start_reader(self):
         """Start reader thread"""
@@ -560,6 +647,7 @@ class Miniterm(object):
             self.alive = False
             raise
 
+
     def get_vampire_help_text(self):
             """return the vampire help text"""
             # help text, starts with blank line!
@@ -568,13 +656,17 @@ class Miniterm(object):
 ---
 ---     ^Ah             display this help text (or ^A^H or ^AH etc)
 ---     ^Aa             send CTRL-A
----     ^Ad <int>       set per-char ms delay
+---     ^Ad <int>       set per-char ms delay (10)
+---     ^Ac             CATALOG of BASIC files
 ---     ^Al <string>    LOAD from the specified filename
 ---     ^As <string>    SAVE to the specified filename
 """.format(version=getattr(serial, 'VERSION', 'unknown version'))
 
 
+    # Vampire user input handler
     def handle_vampire_key( self, c ):
+
+        llvx = self.rx_transformations[0]
 
         if c in 'hH\x08':
             sys.stderr.write( self.get_vampire_help_text() )
@@ -587,31 +679,100 @@ class Miniterm(object):
                 self.console.write(c)
             return False
 
-        if c in 'Ll':
-            print "load?"
-            fname = sys.stdin.readline().rstrip('\r\n')
-            print "Load " + fname
+
+        if c in 'cC\x03':
+            # catalog
+            print "Catalog:"
+            f = []
+            for (dirpath, dirnames, filenames) in walk( llvx.getFilePath() ):
+                #f.extend(filenames)
+                break
+            for fn in filenames:
+                fs = os.stat( llvx.getFilePath() + fn ).st_size
+                print "    {:16} {}".format( fn, fs )
+            return False
+
+        if c in 'Ll\x0c':
+            print "Load: filename?"
+            filename = sys.stdin.readline().rstrip('\r\n')
+            if filename == "":
+                print "Filename required."
+                return False
+
+            print "Load (" + filename + ")"
+            try:
+                with open( llvx.getFilePath() + filename, 'rb') as f:
+                    llvx.passthru = False
+                    self.serial.write( "NEW\x0a\x0d" );
+                    delay( 100 )
+
+                    while True:
+                        block = f.read( 128 )
+                        if not block:
+                            break
+
+                        for idx in range(0, len(block)): 
+                            self.serial.write( block[idx] )
+
+                            # convert \n to \n\r
+                            if block[idx] == '\x0a':
+                                self.serial.write( '\x0d' )
+
+                            delay( llvx.getMsDelay() )
+
+                        sys.stderr.write( '.' )   # Progress indicator.
+
+                self.serial.write( '\x0a\x0d' )
+                print '\nDone.\n'
+                llvx.passthru = True
+
+            except IOError as e:
+                sys.stderr.write('ERROR {}: {} ---\n'.format(filename, e))
             return False
 
         if c in 'Ss':
-            print "save?"
-            fname = sys.stdin.readline().rstrip('\r\n')
-            print "Save " + fname
+            filename = ""
+            while filename == "":
+                print "Save: filename?"
+                filename = sys.stdin.readline().rstrip('\r\n')
+
+                if filename == "":
+                    filename = llvx.getSaveFilename()
+                else:
+                    llvx.setSaveFilename( filename )
+
+            print "Save( " + llvx.getSaveFilename() + " )"
+
+            # actually save it
+            self.serial.write( "\n\rLIST" );
+            self.serial.flush();
+            self.serial.write( "\n\r" );
+            llvx.startCaptureForSave();
             return False
 
-        if c in 'Dd':
+        if c in 'Dd':   # set millisecond-per-typed-char delay
             print "ms?"
-            msdelay = int( sys.stdin.readline().rstrip('\r\n'))
-            if msdelay < 0 or msdelay > 1000:
-                print "ERROR: Out of range (0..1000)"
+            userline = sys.stdin.readline().rstrip('\r\n')
+
+            if userline == "":
+                print "No changes."
                 return False
-            print "set(ms, {})".format( msdelay )
-            return False
+            try:
+                thisMsDelay = int( userline )
+                if thisMsDelay < 0 or thisMsDelay > 1000:
+                    print "ERROR: {} is out of range (0..1000)".format( thisMsDelay )
+                    return False
+                print "set(ms, {})".format( thisMsDelay )
+                llvx.setMsDelay( thisMsDelay )
+                return False
+
+            except ValueError as e:
+                print "ERROR: {} is not a valid ms duration".format( userline )
 
 
         if c in '\x0a\x0d':
             return False
-            
+
         print "ERROR: Unknown char: {} {}".format( hex(ord(c)), c )
 
 
@@ -1020,8 +1181,8 @@ def main(default_port=None, default_baudrate=115200, default_rts=None, default_d
             sys.exit(1)
         filters = args.filter
     else:
-        filters = ['default']
-        #filters = ['llvdrv']
+        #filters = ['default']
+        filters = ['llvdrv']
 
     while True:
         # no port given on command line -> ask user now
