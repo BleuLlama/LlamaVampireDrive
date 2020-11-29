@@ -10,8 +10,6 @@ all:	dev
 
 dev:
 	python llvdrvterm.py /dev/cu.usbmodem01871 115200
-	echo "File:"
-	cat ../BASIC/saved.bas 
 .PHONY: dev
 
 sane:

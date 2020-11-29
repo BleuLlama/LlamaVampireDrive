@@ -34,6 +34,7 @@ from serial.tools import hexlify_codec
 import time         # for sleep
 from GS_Timing import millis, delay
 from os import walk # directory listing
+import math
 
 
 
@@ -493,7 +494,7 @@ class Miniterm(object):
         self.rx_decoder = None
         self.tx_decoder = None
 
-        self.llvampire_character = unichr( 0x01 ) # Vampire command CTRL+A
+        self.llvampire_character = unichr( 0x10 ) # Vampire command CTRL+P
 
     def _start_reader(self):
         """Start reader thread"""
@@ -513,6 +514,7 @@ class Miniterm(object):
     def start(self):
         """start worker threads"""
         self.alive = True
+
         self._start_reader()
         # enter console->serial loop
         self.transmitter_thread = threading.Thread(target=self.writer, name='tx')
@@ -654,31 +656,75 @@ class Miniterm(object):
             return """
 --- Vampire options:
 ---
----     ^Ah             display this help text (or ^A^H or ^AH etc)
----     ^Aa             send CTRL-A
----     ^Ad <int>       set per-char ms delay (10)
----     ^Ac             CATALOG of BASIC files
----     ^Al <string>    LOAD from the specified filename
----     ^As <string>    SAVE to the specified filename
+---     ^Ph             display this help text (or ^P^H or ^PH etc)
+---     ^P^P            send CTRL-P
+---     ^Pd <int>       set per-char ms delay (10)
+---     ^Pc             CATALOG of BASIC files
+---     ^Pl <string>    LOAD from the specified filename
+---     ^Ps <string>    SAVE to the specified filename
 """.format(version=getattr(serial, 'VERSION', 'unknown version'))
 
+    def progress_line( self, currval, topval ):
+        # sanity check
+        if topval == 0:
+            topval = 0.01
+
+        # textual output
+        sys.stdout.write( '{:>5}/{:<5} {:>3}% '.format( currval, topval, 100*currval/topval))
+
+        # graphical output
+        bar_length = 30
+        a = bar_length * currval/topval
+        b = bar_length - a 
+        sys.stdout.write( '[' + ('='*a) + '.'*b + ']\n\r' )
+
+    # since we're in a mode where there's no echo, the usual getline
+    # doesn't show echo while typing, so i wrote this one to handle it all.
+    def my_getline( self, prompt='? ' ):
+        CRLF = '\x0a\x0d'
+        CR   = '\x0d'
+        LF   = '\x0a'
+        clearline = '\x1b[2K'   # ANSI/VT100 clear to end of line
+
+        lineacc = ''
+        while len( lineacc ) < 100:  # just in case.
+            sys.stdout.write( CR + clearline + prompt + lineacc ) # backspace space
+
+            x = sys.stdin.read( 1 )
+
+            if x in '\x0a\x0d\x03\x1b': # NL, CR, ^C, ESC
+                sys.stdout.write( CRLF )
+                return lineacc
+
+            if x in '\x08\x7f': # BS DEL
+                lineacc = lineacc[:-1]
+            else:
+                lineacc = lineacc + x
+
+
+        return lineacc
 
     # Vampire user input handler
     def handle_vampire_key( self, c ):
 
         llvx = self.rx_transformations[0]
+        print c
 
         if c in 'hH\x08':
             sys.stderr.write( self.get_vampire_help_text() )
             return False
 
-        if c in 'aA\x01':
+        if c in 'pP\x10':
             # vampire character again -> send itself
             self.serial.write(self.tx_encoder.encode(c))
             if self.echo:
                 self.console.write(c)
             return False
 
+        if c in 'rR':
+            print "Reset"
+            self.serial.flush()
+            return False
 
         if c in 'cC\x03':
             # catalog
@@ -689,25 +735,36 @@ class Miniterm(object):
                 break
             for fn in filenames:
                 fs = os.stat( llvx.getFilePath() + fn ).st_size
-                print "    {:16} {}".format( fn, fs )
+                print "    {:>5}  {}".format( fs, fn )
             return False
 
         if c in 'Ll\x0c':
-            print "Load: filename?"
-            filename = sys.stdin.readline().rstrip('\r\n')
+            filename = self.my_getline( "Load file? " )
             if filename == "":
-                print "Filename required."
+                print "ERROR: No filename."
+                return False
+            
+            fs = 0
+            try:
+                fs = os.stat( llvx.getFilePath() + filename ).st_size
+            except OSError as e:
+                sys.stderr.write('ERROR {}: {} ---\n'.format(filename, e))
                 return False
 
-            print "Load (" + filename + ")"
+            total = 0
+            print "Loading {}".format( filename )
             try:
                 with open( llvx.getFilePath() + filename, 'rb') as f:
+
+                    self.progress_line( total, fs )
+
                     llvx.passthru = False
                     self.serial.write( "NEW\x0a\x0d" );
                     delay( 100 )
 
                     while True:
                         block = f.read( 128 )
+                        total = total + len(block)
                         if not block:
                             break
 
@@ -720,10 +777,10 @@ class Miniterm(object):
 
                             delay( llvx.getMsDelay() )
 
-                        sys.stderr.write( '.' )   # Progress indicator.
+                        self.progress_line( total, fs )
 
                 self.serial.write( '\x0a\x0d' )
-                print '\nDone.\n'
+                print '\nReady.'
                 llvx.passthru = True
 
             except IOError as e:
@@ -733,15 +790,14 @@ class Miniterm(object):
         if c in 'Ss':
             filename = ""
             while filename == "":
-                print "Save: filename?"
-                filename = sys.stdin.readline().rstrip('\r\n')
+                filename = self.my_getline( "Save file? " )
 
                 if filename == "":
                     filename = llvx.getSaveFilename()
                 else:
                     llvx.setSaveFilename( filename )
 
-            print "Save( " + llvx.getSaveFilename() + " )"
+            print "Saving " + llvx.getSaveFilename()
 
             # actually save it
             self.serial.write( "\n\rLIST" );
@@ -751,8 +807,7 @@ class Miniterm(object):
             return False
 
         if c in 'Dd':   # set millisecond-per-typed-char delay
-            print "ms?"
-            userline = sys.stdin.readline().rstrip('\r\n')
+            filename = self.my_getline( "ms/char (0..1000)? " )
 
             if userline == "":
                 print "No changes."
