@@ -22,8 +22,8 @@ are not necessarily dependent on each other.
 
 # Document Terms & Conventions
 
-In this document control sequences are signified like ^A.  ^A means
-[CTRL]-[a], or ASCII 0x01.
+In this document control sequences are signified like ^P.  ^P means
+[CTRL]-[p], or HEX-ASCII 0x10.
 
 In this document, <CR> signifies a line ending. Actual line endings
 can be <CR> or <LF>.
@@ -115,20 +115,20 @@ something like this:
 
 
 
-# Protocol: From Terminal ^A
+# Protocol: From Terminal ^P
 
 LLVDrv commands may have a "capture from Terminal" version, along with 
 their standard "escape sequence from target" protocol.
 
 This interface is based on a simple control key, then a letter (or multiple 
-letters).  The control key is ^A.  Naturally, 
-to actually send a ^A to the target, you would press it a second time.
+letters).  The control key is ^P.  Naturally, 
+to actually send a ^P to the target, you would press it a second time.
 
 When the system is doing one of its tasks, it may ignore the ^A key pressed,
 for example when binary data or text file data is being sent to the target,
 as that takes place further down the chain.
 
-The currently-planned ^A commands are:
+The currently-planned ^P commands are:
 
 ## General file IO
 
@@ -140,31 +140,30 @@ The currently-planned ^A commands are:
 Loads the specified file (or the last typed-in filename)
 
  - ^AL<CR>
- - ^ALOAD<CR>
+
+The user is prompted for the filename to use
 
 ## BASIC SAVE
 
 Saves the current program to the specified filename (or the last typed-in filename)
 
  - ^AS<CR>
- - ^ASAVE<CR>
- - ^AS fileame<CR>
- - ^ASAVE fileame<CR>
+
+The user is prompted for the filename to use. 
 
 
 ## Miscellaneous
 
- - ^A^A			send [CTRL]-[a]
- - ^AA			send [CTRL]-[a]
- - ^AX			end a capture or autotype session (or do nothing)
- - ^AH			send help text to terminal
- - ^A?			send help text to terminal
- - ^AV			send version text to terminal
+ - ^P^P			send [CTRL]-[p]
+ - ^Pp			send [CTRL]-[p]
+ - ^PX			end a capture or autotype session (or do nothing)
+ - ^PH			send help text to terminal
+ - ^PV			send version text to terminal
 
 ## Additional Future Commands
 
- - ^AB			start the boot sequence on the target
- - ^AR			reboot the target system
+ - ^PB			start the boot sequence on the target
+ - ^PR			reboot the target system (where applicable)
 
 
 
