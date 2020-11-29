@@ -312,10 +312,7 @@ class LlamaVampireDrive( Transform ):
     # version of the implementation here.
 
     def __init__(self):
-        sys.stderr.write("LlamaVampireDrive (miniterm-Transform) starting...\n\n")
-        sys.stderr.flush()
-        self.mode = 'THRU'
-
+        self.version = "PY-LLVD v1.00 2020-11-28"
         self.capturing = False
         self.filepath = '../BASIC/'
         self.save_filename = 'saved.bas'
@@ -326,6 +323,10 @@ class LlamaVampireDrive( Transform ):
         self.msdelay = 10 # seems ok
         self.passthru = True
 
+        sys.stderr.write( "{} starting...\n".format( self.getVersion() ))
+        sys.stderr.write( "LLVD: CTRL-P to interact.\n" )
+        sys.stderr.flush()
+
     def setMsDelay( self, value ):
         self.msdelay = value
         return value
@@ -334,7 +335,7 @@ class LlamaVampireDrive( Transform ):
         return self.msdelay
 
     def getVersion( self ):
-        return "LlamaVampireDrive - (Miniterm Transform) v1.0"
+        return "LlamaVampireDrive ({})".format( self.version )
 
     def getFilePath( self ):
         return self.filepath
@@ -352,7 +353,7 @@ class LlamaVampireDrive( Transform ):
     def endCapture( self ):
         self.save_fh.close()
         self.capturing = False
-        print "\n\r" + self.save_filename + ": Save comple."
+        print "\n\rLLVD: " + self.save_filename + ": Save comple."
 
     def internal_startCapture( self ):
         self.save_fh = open( self.getFilePath() + self.save_filename, 'w' )
@@ -361,12 +362,12 @@ class LlamaVampireDrive( Transform ):
     def startCapture( self ):
         self.captureUntilOk = False
         self.internal_startCapture()
-        print "\n\r" + self.save_filename + ": Saving..."
+        print "\n\rLLVD: " + self.save_filename + ": Saving..."
 
     def startCaptureForSave( self ):
         self.captureForSAVE = True
         self.internal_startCapture()
-        print "\n\r" + self.save_filename + ": Saving until 'Ok'"
+        print "\n\rLLVD: " + self.save_filename + ": Saving until 'Ok'"
 
 
     def echo(self, text):
@@ -632,7 +633,7 @@ class Miniterm(object):
                     vampire_active = self.handle_vampire_key(c)
                 elif c == self.llvampire_character:
                     vampire_active = True
-                    self.console.write( "V? " );
+                    self.console.write( "LLVD? " );
 
                 else:
                     #~ if self.raw:
@@ -722,13 +723,13 @@ class Miniterm(object):
             return False
 
         if c in 'rR':
-            print "Reset"
+            print "LLVD: Reset"
             self.serial.flush()
             return False
 
         if c in 'cC\x03':
             # catalog
-            print "Catalog:"
+            print "LLVD: Catalog:"
             f = []
             for (dirpath, dirnames, filenames) in walk( llvx.getFilePath() ):
                 #f.extend(filenames)
@@ -739,20 +740,20 @@ class Miniterm(object):
             return False
 
         if c in 'Ll\x0c':
-            filename = self.my_getline( "Load file? " )
+            filename = self.my_getline( "LLVD: Load file? " )
             if filename == "":
-                print "ERROR: No filename."
+                print "LLVD: ERROR: No filename."
                 return False
             
             fs = 0
             try:
                 fs = os.stat( llvx.getFilePath() + filename ).st_size
             except OSError as e:
-                sys.stderr.write('ERROR {}: {} ---\n'.format(filename, e))
+                sys.stderr.write('LLVD: ERROR {}: {} ---\n'.format(filename, e))
                 return False
 
             total = 0
-            print "Loading {}".format( filename )
+            print "LLVD: Loading {}".format( filename )
             try:
                 with open( llvx.getFilePath() + filename, 'rb') as f:
 
@@ -780,17 +781,17 @@ class Miniterm(object):
                         self.progress_line( total, fs )
 
                 self.serial.write( '\x0a\x0d' )
-                print '\nReady.'
+                print '\nLLVD: Done.'
                 llvx.passthru = True
 
             except IOError as e:
-                sys.stderr.write('ERROR {}: {} ---\n'.format(filename, e))
+                sys.stderr.write('LLVD: ERROR {}: {} ---\n'.format(filename, e))
             return False
 
         if c in 'Ss':
             filename = ""
             while filename == "":
-                filename = self.my_getline( "Save file? " )
+                filename = self.my_getline( "LLVD: Save file? " )
 
                 if filename == "":
                     filename = llvx.getSaveFilename()
@@ -807,7 +808,7 @@ class Miniterm(object):
             return False
 
         if c in 'Dd':   # set millisecond-per-typed-char delay
-            filename = self.my_getline( "ms/char (0..1000)? " )
+            filename = self.my_getline( "LLVD: ms/char (0..1000)? " )
 
             if userline == "":
                 print "No changes."
@@ -822,13 +823,13 @@ class Miniterm(object):
                 return False
 
             except ValueError as e:
-                print "ERROR: {} is not a valid ms duration".format( userline )
+                print "LLVD: ERROR: {} is not a valid ms duration".format( userline )
 
 
         if c in '\x0a\x0d':
             return False
 
-        print "ERROR: Unknown char: {} {}".format( hex(ord(c)), c )
+        print "LLVD: ERROR: Unknown char: {} {}".format( hex(ord(c)), c )
 
 
         # returning false returns control to terminal operations
