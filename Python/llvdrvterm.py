@@ -31,6 +31,8 @@ import serial
 from serial.tools.list_ports import comports
 from serial.tools import hexlify_codec
 
+sys.path.append('libs/')
+
 from Transform import Transform
 from LlamaVampireDrive import LlamaVampireDrive
 

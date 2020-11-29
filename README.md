@@ -132,8 +132,8 @@ The currently-planned ^P commands are:
 
 ## General file IO
 
- - ^AT <filename><CR>	autotype a file
- - ^AC <filename><CR>	capture to a file, ^AX to end.
+ - ^At <filename><CR>	autotype a file
+ - ^Ac <filename><CR>	capture to a file, ^AX to end.
 
 ## BASIC LOAD
 
@@ -156,14 +156,17 @@ The user is prompted for the filename to use.
 
  - ^P^P			send [CTRL]-[p]
  - ^Pp			send [CTRL]-[p]
- - ^PX			end a capture or autotype session (or do nothing)
- - ^PH			send help text to terminal
- - ^PV			send version text to terminal
+
+ - ^Ph			send help text to terminal
+ - ^Pv			send version text to terminal
+ - ^Pq          toggle quiet mode (target output is read and ignored)
+
+ - ^Px			end a capture or autotype session (or do nothing)
 
 ## Additional Future Commands
 
- - ^PB			start the boot sequence on the target
- - ^PR			reboot the target system (where applicable)
+ - ^Pb			start the boot sequence on the target
+ - ^Pr			reboot the target system (where applicable)
 
 
 

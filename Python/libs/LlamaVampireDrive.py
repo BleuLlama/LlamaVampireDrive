@@ -1,3 +1,10 @@
+# LlamaVampireDrive
+#
+#   offers file IO to a console-based connection
+#   Python version, using hacked miniterm.py
+#
+#   1.00 2020-11-28 Scott Lawrence - yorgle@gmail.com
+#
 
 import codecs
 import os
@@ -28,6 +35,7 @@ class LlamaVampireDrive( Transform ):
         self.msdelay = 10 # seems ok
         self.ioblocksize = 64
 
+        self.quietmode = False
         self.capturing = False
         self.captureForSAVE = False
         self.save_fh = False
@@ -119,7 +127,7 @@ class LlamaVampireDrive( Transform ):
                     self.accumulator = self.accumulator + ch
 
         # pass it on...
-        if self.passthru:
+        if self.passthru and not self.quietmode:
             return text
         return ''
 
@@ -145,6 +153,7 @@ class LlamaVampireDrive( Transform ):
 ---     ^Pc             CATALOG of BASIC files
 ---     ^Pl <string>    LOAD from the specified filename
 ---     ^Ps <string>    SAVE to the specified filename
+---     ^Pq             toggle quiet mode (ignores target output)
 """
 
     def progress_line( self, currval, topval ):
@@ -192,6 +201,10 @@ class LlamaVampireDrive( Transform ):
     def handle_user_command( self, c, theSerial ):
         print c
 
+        if c in 'vV':
+            print "LLVD: {}".format( self.version )
+            return False
+
         if c in 'hH\x08':
             sys.stderr.write( self.get_vampire_help_text() )
             return False
@@ -204,8 +217,33 @@ class LlamaVampireDrive( Transform ):
             return False
 
         if c in 'rR':
-            print "LLVD: Reset"
+            print "LLVD: Reset*"
             theSerial.flush()
+            return False
+
+        if c in 'bB':
+            print "LLVD: Boot*"
+            return False
+
+        if c in 'xX':
+            print "LLVD: Capture stopped*"
+            return False
+
+        if c in 'tT':
+            print "LLVD: Autotype a file*"
+            return False
+
+        if c in 'cC':
+            print "LLVD: Capture to file*"
+            return False
+
+        if c in 'qQ':
+            if self.quietmode:
+                self.quietmode = False
+                print "LLVD: Quiet mode off."
+            else:
+                self.quietmode = True
+                print "LLVD: Quiet mode."
             return False
 
 
