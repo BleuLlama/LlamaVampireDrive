@@ -509,7 +509,7 @@ class Miniterm(object):
 
                 elif c == llvx.activationkey:
                     vampire_active = True
-                    self.console.write( llvx.shortname + '? ' );
+                    self.console.write( llvx.qprompt );
 
                 else:
                     #~ if self.raw:

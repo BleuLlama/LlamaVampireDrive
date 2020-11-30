@@ -130,43 +130,52 @@ as that takes place further down the chain.
 
 The currently-planned ^P commands are:
 
-## General file IO
+## File IO
 
- - ^At <filename><CR>	autotype a file
- - ^Ac <filename><CR>	capture to a file, ^AX to end.
+ - ^Pt<filename><CR>	type a file to the target
+ - ^Pc<filename><CR>	capture to a file (only target output is saved)
+ - ^Px					ends a running capture
+
+ - ^Pb					loads "boot.bas", and sends "RUN" to run it.
 
 ## BASIC LOAD
 
 Loads the specified file (or the last typed-in filename)
+The default filename is "saved.bas".
 
- - ^AL<CR>
+ - ^Pl<filename><CR>	loads the specified filename
+ - ^Pl<CR>	loads the last typed-in filename (or "saved.bas")
 
 The user is prompted for the filename to use
 
 ## BASIC SAVE
 
 Saves the current program to the specified filename (or the last typed-in filename)
+The default filename is "saved.bas".
 
- - ^AS<CR>
+ - ^Ps<filename><CR>	saves to the specified filename
+ - ^Ps<CR>	saves to the last typed-in filename
 
 The user is prompted for the filename to use. 
 
 
 ## Miscellaneous
 
+ - ^Pb			start the boot sequence on the target
+
  - ^P^P			send [CTRL]-[p]
  - ^Pp			send [CTRL]-[p]
 
  - ^Ph			send help text to terminal
+ - ^P?			send help text to terminal
  - ^Pv			send version text to terminal
  - ^Pq          toggle quiet mode (target output is read and ignored)
 
  - ^Px			end a capture or autotype session (or do nothing)
 
-## Additional Future Commands
+## Future Commands
 
- - ^Pb			start the boot sequence on the target
- - ^Pr			reboot the target system (where applicable)
+ - ^Pr			reboot the target system (TBD)
 
 
 
@@ -174,27 +183,30 @@ The user is prompted for the filename to use.
 
 The commands available to the target may include:
 
-- ASCII "autotype" of content from mass storage to the target
-- ASCII "capture" of content from the target to the flash drive
-- Binary file loading and saving
+- ASCII "type" of content from a file to the target
+- ASCII "capture" of content from the target to a file
+- Binary file loading and saving/transfer
 - Sector based loading and saving for virtual disks
-- Realtime Clock (if equipped)
-- Other GPIO functions, including target reset (if equipped)
+- Realtime Clock set/get
+- Other GPIO functions, including target reset
 
 I'll go through these one by one to explain their function as well as 
 how to 'make them happen'...
 
 ## Message Types Explained
 
-Autotype and Capture are used to send or receive exact text files
-from the mass storage from
-the target computer.  Capture can also quietly capture content, where
-it will not also send it back to the terminal.  These are used as a
-way to soft-patch BASIC to allow for loading and saving files, as 
-well as for sending the BOOT.BAS file... by typing it in, for example
+Type and Capture are used to send or receive exact text files
+from the mass storage from the target computer.
+
+Load and Save are basically Type and Capture, but with extra 
+stuff around them to make them more user friendly for pure
+BASIC programming.  Load will also send "NEW" to the target,
+if the file to be loaded is readable. Save will do a capture,
+but skip over the "LIST" and "Ok" text echo/responses.
 
 Binary file loading and saving are good for accessing binary or 
-text files that exist on the mass storage drive.
+text files that exist on the mass storage drive, and can be done
+quicker than with the delay added for BASIC load and save
 
 Sector based accesses are for OSes like CP/M which usually access
 the sectors of a disk directly.  Rather than using compact flash
@@ -207,7 +219,7 @@ and deploying sector-based filesystems as easy as copying files
 normally or unzipping file heirarchies.
 
 Then there are utility api commands, for accessing time and date,
-gpio functions and such.
+gpio functions and such.  These are TBD
 
 
 ## Message Structure
@@ -237,10 +249,14 @@ switch LLVDrv into message listening mode.  This borrows the
 
 Reference: https://en.wikipedia.org/wiki/C0_and_C1_control_codes
 
+
 ### DEVICE CHANNEL (one byte: '0'..'9')
 
 For the most part, this can be ignored in the first versions
 here, and will always be set as 0.
+
+The text in this section is for future implementation, so 
+for now, just use "0", and you can ignore this information. ;)
 
 Next is an ascii value from '0' to '9'. This signifies which 
 device in the chain should get the message.  A physical device 
@@ -374,7 +390,7 @@ Open for append or create new:
 
 ### RH?n -- read n bytes from file
 
-Read 16 bytes from the currently open file
+Read 16 bytes from the currently open file:
 
 	RH?16
 
@@ -389,6 +405,12 @@ the returned record to match this.  For example, if 32 bytes were requested,
 but only three were returned, the response may look like this:
 
     RH:3:452233
+
+Also note that the field containing the number of bytes is NOT zero padded.
+Zero padded values are optional.  That is to say, this is equivalent to
+the above message:
+
+    RH:0003:452233
 
 
 ### LS?p	-- Request filesystem list entries of path p

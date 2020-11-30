@@ -1,4 +1,3 @@
-
 10 REM FIB.BAS
 20 REM  just print out a sequence of fibbonnaacciii numbers
 100 CURR = 1

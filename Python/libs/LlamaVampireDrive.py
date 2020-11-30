@@ -3,7 +3,10 @@
 #   offers file IO to a console-based connection
 #   Python version, using hacked miniterm.py
 #
-#   1.00 2020-11-28 Scott Lawrence - yorgle@gmail.com
+#   Scott Lawrence - yorgle@gmail.com
+#
+#   1.01 2020-11-30     Textfile commands (capture, type)
+#   1.00 2020-11-28     Initial version, BASIC commands
 #
 
 import codecs
@@ -29,61 +32,31 @@ class LlamaVampireDrive( Transform ):
     # version of the implementation here.
 
     def __init__(self):
-        self.version = "PY-LLVD v1.00 2020-11-28"
-        self.filepath = '../BASIC/'
-        self.save_filename = 'saved.bas'
-        self.msdelay = 10 # seems ok
-        self.ioblocksize = 64
+        self.version = "PY-LLVD v1.01 2020-11-30"
 
-        self.quietmode = False
-        self.capturing = False
+        self.filepath = 'FS/BASIC/'
+
+        self.basic_filename = 'SAVED.BAS'
         self.captureForSAVE = False
         self.save_fh = False
+
+        self.capture_filename = 'CAPTURE.TXT'
+        self.captureToFile = False
+        self.file_fh = False
+
+        self.msdelay = 10 # seems ok
+        self.ioblocksize = 64
+        self.quietmode = False
         self.accumulator = ''
         self.passthru = True
         self.activationkey = unichr( 0x10 ) # Vampire command CTRL+P
-        self.shortname = 'LLVD'
+        self.qprompt = 'V? '
+        self.prompt = 'V> '
 
 
-        sys.stderr.write( "{} starting...\n".format( self.getVersion() ))
-        sys.stderr.write( "LLVD: CTRL-P to interact.\n" )
-        sys.stderr.flush()
+        self.userprint( "{} starting...".format( self.getVersion() ))
+        self.userprint( "CTRL-P to interact." )
 
-    # --------------------------------------------
-
-    def getVersion( self ):
-        return "LlamaVampireDrive ({})".format( self.version )
-
-    def getFilePath( self ):
-        return self.filepath
-
-    def setSaveFilename( self, filename ):
-        if filename == "":
-            return false
-
-        self.save_filename = filename
-        return filename
-
-    # --------------------------------------------
-
-    def endCapture( self ):
-        self.save_fh.close()
-        self.capturing = False
-        print "\n\rLLVD: " + self.save_filename + ": Save comple."
-
-    def internal_startCapture( self ):
-        self.save_fh = open( self.getFilePath() + self.save_filename, 'w' )
-        self.capturing = True
-
-    def startCapture( self ):
-        self.captureUntilOk = False
-        self.internal_startCapture()
-        print "\n\rLLVD: " + self.save_filename + ": Saving..."
-
-    def startCaptureForSave( self ):
-        self.captureForSAVE = True
-        self.internal_startCapture()
-        print "\n\rLLVD: " + self.save_filename + ": Saving until 'Ok'"
 
     # --------------------------------------------
 
@@ -94,8 +67,11 @@ class LlamaVampireDrive( Transform ):
     def rx(self, text):
         """text received from serial port"""
 
+        if self.captureToFile:
+            self.file_fh.write( text )
+
         # save to a file if we need to
-        if self.capturing:
+        if self.captureForSAVE:
             # make sure we're doing this byte by byte..
             for ch in text:
                 # re-accumulate it into lines:
@@ -107,7 +83,7 @@ class LlamaVampireDrive( Transform ):
                         # do something with contented lines
                         if self.accumulator == 'Ok':
                             # on Ok, we're done.
-                            self.endCapture()
+                            self.endCaptureForSave()
                             return text # make sure we bail out of the loop.
 
                         elif self.accumulator == 'LIST':
@@ -136,7 +112,61 @@ class LlamaVampireDrive( Transform ):
         #sys.stderr.write(' [TX:{}] '.format(repr(text)))
         #sys.stderr.flush()
 
+        # don't capture stuff the user sends. leave this commented out.
+        #if self.captureToFile:
+        #    self.file_fh.write( text )
+
         return text
+
+
+    # --------------------------------------------
+
+    def userprint( self, txt ):
+        sys.stdout.write( self.prompt + txt + "\n" )
+        sys.stdout.flush()
+
+    def usererror( self, txt ):
+        sys.stdout.write( self.prompt + "ERROR: " + txt + "\n" )
+        sys.stdout.flush()
+
+    def getVersion( self ):
+        return "LlamaVampireDrive ({})".format( self.version )
+
+    def getFilePath( self ):
+        return self.filepath
+
+    def setFilename( self, filename ):
+        if filename == "":
+            return false
+        self.basic_filename = filename
+        return filename
+
+    # --------------------------------------------
+
+    # capture to file
+    def startTextCapture( self, filename ):
+        self.file_fh = open( self.getFilePath() + filename, 'w' )
+        self.captureToFile = True
+        self.userprint( filename + ": Capturing." )
+
+    def endTextCapture( self ):
+        self.captureToFile = False
+        self.file_fh.close()
+        self.userprint( self.capture_filename + ": Capture ended." )
+
+
+    # capture for BASIC SAVE
+
+    def startCaptureForSave( self, filename ):
+        self.save_fh = open( self.getFilePath() + filename, 'w' )
+        self.captureForSAVE = True
+        self.userprint( filename + ": Saving until 'Ok'" )
+
+    def endCaptureForSave( self ):
+        self.captureForSAVE = False
+        self.save_fh.close()
+        self.userprint( self.basic_filename + ": Save complete." )
+
 
     # --------------------------------------------
 
@@ -144,18 +174,29 @@ class LlamaVampireDrive( Transform ):
     def get_help_text(self):
             """return the vampire help text"""
             # help text, starts with blank line!
-            return """
---- Vampire options:
----
----     ^Ph             display this help text (or ^P^H or ^PH etc)
----     ^P^P            send CTRL-P
----     ^Pd <int>       set per-char ms delay (10)
----     ^Pc             CATALOG of BASIC files
----     ^Pl <string>    LOAD from the specified filename
----     ^Ps <string>    SAVE to the specified filename
----     ^Pq             toggle quiet mode (ignores target output)
-"""
+            return """Vampire "CTRL-P" commands:
 
+  BASIC commands:   (Default file: SAVED.BAS)
+    ^Pc                 (C)ATALOG of BASIC files
+    ^Pl<filename><CR>   (L)OAD from the specified filename
+    ^Ps<filename><CR>   (S)AVE to the specified filename
+
+  Textfile commands: (Default file: CAPTURE.TXT)
+    ^Pt<filename><CR>   (T)ype content from a file to the target
+    ^Pf<filename><CR>   capture all IO to a (f)ile..
+    ^Px                 ..and E(x)it capture to the file
+
+  Utility commands:
+    ^Pb                 (b)oot - LOAD and RUN the program BOOT.BAS
+    ^Ph                 Display this (h)elp text (or ^P^H or ^PH etc)
+    ^P^P                Send CTRL-P
+    ^Pd<int><CR>        Set per-char (d)elay in milliseconds
+    ^Pd<CR>             Show per-char (d)elay in milliseconds
+    ^Pq                 Toggle (q)uiet IO mode
+    ^Pv                 Display (v)ersion"""
+
+    # progress_line
+    #   utility function to display a progress bar to the terminal
     def progress_line( self, currval, topval ):
         # sanity check
         if topval == 0:
@@ -197,16 +238,125 @@ class LlamaVampireDrive( Transform ):
         return lineacc
 
 
+    # cmd_TypeToTarget
+    #   send the specified text file to the target
+    def cmd_TypeToTarget( self, filename, theSerial ):
+        fs = 0
+        try:
+            fs = os.stat( self.getFilePath() + filename ).st_size
+        except OSError as e:
+            self.usererror( "{}: {} ---\n".format(filename, e) )
+            return False
 
+        total = 0
+        self.userprint( "Typing {} ({} bytes)".format( filename, fs ) )
+        try:
+            with open( self.getFilePath() + filename, 'rb') as f:
+                while True:
+                    block = f.read( self.ioblocksize )
+                    total = total + len(block)
+                    if not block:
+                        break
+
+                    for idx in range(0, len(block)): 
+                        theSerial.write( block[idx] )
+
+                        # convert \n to \n\r
+                        if block[idx] == '\x0a':
+                            theSerial.write( '\x0d' )
+
+                        delay( self.msdelay )
+
+                    sys.stdout.write( "\n\r" )
+                    self.progress_line( total, fs )
+
+        except IOError as e:
+            self.usererror( "{}: {} ---\n".format(filename, e))
+        return False
+
+
+    # cmd_BASIC_Catalog
+    #   Send a file listing of the current file path to the terminal
+    def cmd_BASIC_Catalog( self ):
+        f = []
+        for (dirpath, dirnames, filenames) in walk( self.getFilePath() ):
+            #f.extend(filenames)
+            break
+        for fn in filenames:
+            fs = os.stat( self.getFilePath() + fn ).st_size
+            print "    {:>5}  {}".format( fs, fn )
+
+
+    # cmd_BASIC_Load
+    #   pretty much the same thing, but it inhibits echo, and types "NEW" first
+    def cmd_BASIC_Load( self, filename, theSerial ):
+        fs = 0
+        try:
+            fs = os.stat( self.getFilePath() + filename ).st_size
+        except OSError as e:
+            self.usererror( "{}: {} ---\n".format(filename, e) )
+            return False
+
+        total = 0
+        self.userprint( "Loading {}".format( filename ) )
+        try:
+            with open( self.getFilePath() + filename, 'rb') as f:
+
+                self.progress_line( total, fs )
+
+                self.passthru = False
+                theSerial.write( "NEW\x0a\x0d" );
+                delay( 100 )
+
+                while True:
+                    block = f.read( self.ioblocksize )
+                    total = total + len(block)
+                    if not block:
+                        break
+
+                    for idx in range(0, len(block)): 
+                        theSerial.write( block[idx] )
+
+                        # convert \n to \n\r
+                        if block[idx] == '\x0a':
+                            theSerial.write( '\x0d' )
+
+                        delay( self.msdelay )
+
+                    self.progress_line( total, fs )
+
+            theSerial.write( '\x0a\x0d' )
+            self.userprint( "Done." )
+            self.passthru = True
+
+        except IOError as e:
+            self.usererror( "{}: {} ---\n".format(filename, e))
+        return False
+
+    # cmd_Boot
+    #   load BOOT.BAS and RUN it.
+    def cmd_Boot(self, theSerial):
+        self.cmd_BASIC_Load( "BOOT.BAS", theSerial )
+        theSerial.write( 'RUN\x0a\x0d' )
+
+    # cmd_Reset
+    #   do whatever's necessary to reset the target (gpio toggle, etc)
+    def cmd_Reset(self, theSerial):
+        self.userprint( "Reset" )
+        theSerial.flush()
+
+    # handle_user_command
+    #   handle input from the user terminal while in LLVD mode
     def handle_user_command( self, c, theSerial ):
         print c
 
+        # Utility Commands
         if c in 'vV':
-            print "LLVD: {}".format( self.version )
+            self.userprint( self.version )
             return False
 
-        if c in 'hH\x08':
-            sys.stderr.write( self.get_vampire_help_text() )
+        if c in 'hH?\x08':
+            self.userprint( self.get_help_text() )
             return False
 
         if c in 'pP\x10':
@@ -216,143 +366,120 @@ class LlamaVampireDrive( Transform ):
                 self.console.write(c)
             return False
 
-        if c in 'rR':
-            print "LLVD: Reset*"
-            theSerial.flush()
-            return False
+        if c in 'Dd':   # set millisecond-per-typed-char delay
+            userline = self.my_getline( self.prompt + "ms/char (0..1000)? " )
 
-        if c in 'bB':
-            print "LLVD: Boot*"
-            return False
+            if userline != "":
+                try:
+                    thisMsDelay = int( userline )
+                    if thisMsDelay < 0 or thisMsDelay > 1000:
+                        self.usererror( "{} is out of range (0..1000)".format( thisMsDelay ))
+                    else:
+                        self.userprint( "set(ms, {})".format( thisMsDelay ))
+                        self.msdelay = thisMsDelay
 
-        if c in 'xX':
-            print "LLVD: Capture stopped*"
-            return False
+                except ValueError as e:
+                    self.usererror( "{} is not a valid ms duration".format( userline ))
 
-        if c in 'tT':
-            print "LLVD: Autotype a file*"
-            return False
-
-        if c in 'cC':
-            print "LLVD: Capture to file*"
+            self.userprint( "Delay = {} ms".format( self.msdelay ));
             return False
 
         if c in 'qQ':
             if self.quietmode:
                 self.quietmode = False
-                print "LLVD: Quiet mode off."
+                self.userprint( "Quiet mode off." )
             else:
                 self.quietmode = True
-                print "LLVD: Quiet mode."
+                self.userprint( "Quiet mode." )
             return False
 
+
+        # Misc general utility
+
+        if c in 'rR':
+            self.cmd_Reset( theSerial )
+            return False
+
+        if c in 'bB':
+            self.cmd_Boot( theSerial )
+            return False
+
+
+        # BASIC Commands
 
         if c in 'cC\x03':
             # catalog
-            print "LLVD: Catalog:"
-            f = []
-            for (dirpath, dirnames, filenames) in walk( self.getFilePath() ):
-                #f.extend(filenames)
-                break
-            for fn in filenames:
-                fs = os.stat( self.getFilePath() + fn ).st_size
-                print "    {:>5}  {}".format( fs, fn )
+            self.userprint( "Catalog:" )
+            self.cmd_BASIC_Catalog()
             return False
-
 
         if c in 'Ll\x0c':
             filename = self.my_getline( "LLVD: Load file? " )
+
             if filename == "":
-                print "LLVD: ERROR: No filename."
-                return False
-            
-            fs = 0
-            try:
-                fs = os.stat( self.getFilePath() + filename ).st_size
-            except OSError as e:
-                sys.stderr.write('LLVD: ERROR {}: {} ---\n'.format(filename, e))
-                return False
+                filename = self.basic_filename
+            else:
+                self.setFilename( filename )
 
-            total = 0
-            print "LLVD: Loading {}".format( filename )
-            try:
-                with open( self.getFilePath() + filename, 'rb') as f:
-
-                    self.progress_line( total, fs )
-
-                    self.passthru = False
-                    theSerial.write( "NEW\x0a\x0d" );
-                    delay( 100 )
-
-                    while True:
-                        block = f.read( self.ioblocksize )
-                        total = total + len(block)
-                        if not block:
-                            break
-
-                        for idx in range(0, len(block)): 
-                            theSerial.write( block[idx] )
-
-                            # convert \n to \n\r
-                            if block[idx] == '\x0a':
-                                theSerial.write( '\x0d' )
-
-                            delay( self.msdelay )
-
-                        self.progress_line( total, fs )
-
-                theSerial.write( '\x0a\x0d' )
-                print '\nLLVD: Done.'
-                self.passthru = True
-
-            except IOError as e:
-                sys.stderr.write('LLVD: ERROR {}: {} ---\n'.format(filename, e))
+            self.cmd_BASIC_Load( filename, theSerial )
             return False
-
 
         if c in 'Ss':
             filename = ""
             while filename == "":
-                filename = self.my_getline( "LLVD: Save file? " )
+                filename = self.my_getline( self.prompt + "Save file? " )
 
                 if filename == "":
-                    filename = self.save_filename
+                    filename = self.basic_filename
                 else:
-                    self.setSaveFilename( filename )
+                    self.setFilename( filename )
 
-            print "Saving " + self.save_filename
+            self.userprint( "Saving " + self.basic_filename )
 
             # actually save it
             theSerial.write( "\n\rLIST" );
             theSerial.flush();
             theSerial.write( "\n\r" );
-            self.startCaptureForSave();
+            self.startCaptureForSave( self.basic_filename );
             return False
 
-        if c in 'Dd':   # set millisecond-per-typed-char delay
-            filename = self.my_getline( "LLVD: ms/char (0..1000)? " )
 
-            if userline == "":
-                print "No changes."
-                return False
-            try:
-                thisMsDelay = int( userline )
-                if thisMsDelay < 0 or thisMsDelay > 1000:
-                    print "ERROR: {} is out of range (0..1000)".format( thisMsDelay )
-                    return False
-                print "set(ms, {})".format( thisMsDelay )
-                self.msdelay = thisMsDelay
+        # Textfile Commands
+
+        if c in 'tT':
+            filename = self.my_getline( "LLVD: Type file? " )
+
+            if filename == "":
+                self.userprint( "No filename. No action." )
                 return False
 
-            except ValueError as e:
-                print "LLVD: ERROR: {} is not a valid ms duration".format( userline )
+            self.cmd_TypeToTarget( filename, theSerial )
+            return False
 
+        if c in 'fF':
+            filename = ""
+            while filename == "":
+                filename = self.my_getline( "LLVD: Capture to file? " )
+
+                if filename == "":
+                    filename = self.capture_filename
+                else:
+                    self.capture_filename = filename
+
+            self.startTextCapture( filename )
+            return False
+
+        if c in 'xX':
+            self.endTextCapture()
+            return False
+
+        # not a command... 
 
         if c in '\x0a\x0d':
+            # empty line. do nothing.
             return False
 
-        print "LLVD: ERROR: Unknown char: {} {}".format( hex(ord(c)), c )
-
+        self.usererror( "What? {} {}".format( hex(ord(c)), c ) )
 
         # returning false returns control to terminal operations
         return False
