@@ -34,12 +34,12 @@ class LlamaVampireDrive( Transform ):
     def __init__(self):
         self.version = "PY-LLVD v1.01 2020-11-30"
 
-        self.filepath = 'FS/BASIC/'
-
+        self.basic_filepath = 'FS/BASIC/'
         self.basic_filename = 'SAVED.BAS'
         self.captureForSAVE = False
         self.save_fh = False
 
+        self.filepath = 'FS/'
         self.capture_filename = 'CAPTURE.TXT'
         self.captureToFile = False
         self.file_fh = False
@@ -132,8 +132,6 @@ class LlamaVampireDrive( Transform ):
     def getVersion( self ):
         return "LlamaVampireDrive ({})".format( self.version )
 
-    def getFilePath( self ):
-        return self.filepath
 
     def setFilename( self, filename ):
         if filename == "":
@@ -145,7 +143,7 @@ class LlamaVampireDrive( Transform ):
 
     # capture to file
     def startTextCapture( self, filename ):
-        self.file_fh = open( self.getFilePath() + filename, 'w' )
+        self.file_fh = open( self.filepath + filename, 'w' )
         self.captureToFile = True
         self.userprint( filename + ": Capturing." )
 
@@ -158,7 +156,7 @@ class LlamaVampireDrive( Transform ):
     # capture for BASIC SAVE
 
     def startCaptureForSave( self, filename ):
-        self.save_fh = open( self.getFilePath() + filename, 'w' )
+        self.save_fh = open( self.basic_filepath + filename, 'w' )
         self.captureForSAVE = True
         self.userprint( filename + ": Saving until 'Ok'" )
 
@@ -243,7 +241,7 @@ class LlamaVampireDrive( Transform ):
     def cmd_TypeToTarget( self, filename, theSerial ):
         fs = 0
         try:
-            fs = os.stat( self.getFilePath() + filename ).st_size
+            fs = os.stat( self.filepath + filename ).st_size
         except OSError as e:
             self.usererror( "{}: {} ---\n".format(filename, e) )
             return False
@@ -251,7 +249,7 @@ class LlamaVampireDrive( Transform ):
         total = 0
         self.userprint( "Typing {} ({} bytes)".format( filename, fs ) )
         try:
-            with open( self.getFilePath() + filename, 'rb') as f:
+            with open( self.filepath + filename, 'rb') as f:
                 while True:
                     block = f.read( self.ioblocksize )
                     total = total + len(block)
@@ -279,11 +277,11 @@ class LlamaVampireDrive( Transform ):
     #   Send a file listing of the current file path to the terminal
     def cmd_BASIC_Catalog( self ):
         f = []
-        for (dirpath, dirnames, filenames) in walk( self.getFilePath() ):
+        for (dirpath, dirnames, filenames) in walk( self.basic_filepath ):
             #f.extend(filenames)
             break
         for fn in filenames:
-            fs = os.stat( self.getFilePath() + fn ).st_size
+            fs = os.stat( self.basic_filepath + fn ).st_size
             print "    {:>5}  {}".format( fs, fn )
 
 
@@ -292,7 +290,7 @@ class LlamaVampireDrive( Transform ):
     def cmd_BASIC_Load( self, filename, theSerial ):
         fs = 0
         try:
-            fs = os.stat( self.getFilePath() + filename ).st_size
+            fs = os.stat( self.basic_filepath + filename ).st_size
         except OSError as e:
             self.usererror( "{}: {} ---\n".format(filename, e) )
             return False
@@ -300,7 +298,7 @@ class LlamaVampireDrive( Transform ):
         total = 0
         self.userprint( "Loading {}".format( filename ) )
         try:
-            with open( self.getFilePath() + filename, 'rb') as f:
+            with open( self.basic_filepath + filename, 'rb') as f:
 
                 self.progress_line( total, fs )
 

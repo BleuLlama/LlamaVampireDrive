@@ -94,6 +94,32 @@ interface.
 
 -----
 
+# Filesystem Overview
+
+LLVD expexts a directory (or symlink) in the current directory named "FS"
+that contains all of the files it provides and stores.  In this directory
+are a few subdirectories to keep things tidy:
+
+## FS/
+
+This is the root of the LLVD filesystem. Captures will be stored 
+in this directory.
+
+
+## FS/BASIC
+
+This directory is the default directory for all of the basic programs.
+Everything LOADed and SAVEd will be out of this directory.  CATALOG
+will provide a listing of this directory as well.
+
+## FS/DRV
+
+This directory contains the virtual drive files.  More info on this
+later in this document
+
+
+-----
+
 # The Protocol and Interface Commands
 
 
@@ -461,33 +487,33 @@ End the capture session
 	E.
 
 
-## Filesystem
+## Filesystem - Details
 
 The filesystem on the flash drive is set up specifically to
 make usage more useful.  All of the files and heirarchies for
-these interactions are within a directory named "LL".  For
+these interactions are within a directory named "FS".  For
 the sake of this document, this folder/directory will be
-referred to as MS:/LL  This is the LL directory in the mass
+referred to as MS:/FS  This is the LL directory in the mass
 storage drive.
 
 For the boot process, the files explained above are on the
 disk as:
 
-    MS:/LL/BOOTC000.BAS
-    MS:/LL/BOOT0000.ROM
+    MS:/FS/BOOTC000.BAS
+    MS:/FS/BOOT0000.ROM
 
 The virtual disks are stored in the DRV subdirectory:
 
-	MS:/LL/DRV/
+	MS:/FS/DRV/
 
 In there, each folder is a virtual disk.  For now, there is
 a 1:1 corrolation between these disks and CP/M disks.  So
 for the first three drives, their contents will be in the
 folders:
 
-	MS:/LL/DRV/A/
-	MS:/LL/DRV/B/
-	MS:/LL/DRV/C/
+	MS:/FS/DRV/A/
+	MS:/FS/DRV/B/
+	MS:/FS/DRV/C/
 
 And within each are a 4-digit zero padded directory that
 specifes the track, and within each of those are a file for
@@ -495,6 +521,6 @@ each sector's data, named similarly. Example;
 
 File containing Drive B, Track 34, sector 3 would be in:
 
-	MS:/LL/DRV/B/0034/0003.BIN
+	MS:/FS/DRV/B/0034/0003.BIN
 
 And so on.
