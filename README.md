@@ -311,29 +311,32 @@ This indicates what command is to be used.  Unknown commands
 should be ignored and fail silently.  Here's a list of all of the 
 commands.
 
- - ST:key:value  	- Set item (also the response)
- - ST:key		  	- Get item
+ - ST:key:value  	- Set a setting value (also the response)
+ - GT:key		  	- Get a setting value
 
- - OR:hnd 			- open for read, using handle id
- - OW:hnd			- open for write, using handle id
- - OA:hnd			- open for append, using handle id
+ - OP:hnd:fn:mode	- open (fn)filename using mode "r" "w" "a", using handle id
+ - SK:hnd:pos		- seek to the specified position for the handle id
  - CL:hnd			- close a file, using handle id
 
  - RH:hnd:nb		- request read of a number of bytes (nb)
  - WH:hnd:nb:hex	- write data to an open file
 
  - LS:path			- get list of filesystem entries
+
  - RS:d:t:s			- read sector (drive, track, sector)
  - WS:d:t:s:hex		- write sector (drive, track, sector)
+
  - CA:filename		- start capture to file
  - CE:				- End capture session
 
+ - EE:text			- Echo text back to the target
+
 
 For set and get, these are the available keys:
- - FN	- filename
  - CD	- current directory
  - TM	- Current time HHMMSSmmm or HHMMSS, 24 hour time
  - DT	- Current date YYYYMMDD
+ - QM	- Quiet Mode (1/0)
 
 
 ### FIELD SEPARATOR (one byte: ':')
@@ -365,25 +368,14 @@ Reference: https://en.wikipedia.org/wiki/C0_and_C1_control_codes
 
 ### ST:k:v --  set key 'k' to have value 'v'
 
-Set the filename:
-
-	ST:FN:filename
-
-Get the filename:
-
-	ST:FN
-
-responds with ST:FN:filename response as above:
-
-	ST:FN:readme.txt		returned string
-
 
 The list of available settable keys:
 
-- FN - filename for open/write/append
 - CD - /absolute path name to change as the 'current directory'
 - TM - current time in zero-padded 24 hour format HHMMSSmmm : hours, minutes seconds, millis (optional)
 - DT - current date in zero-padded format YYYYmmdd : year, month, day
+- QM - quiet mode (inhibit echo to terminal), 1 = quiet, 0 = NOISY
+
 
 
 Set the current time. be sure to zero-pad values to the right number of places.
@@ -404,12 +396,19 @@ Get the current date:
 
     ST:DT
 
+Turn on quiet mode:
+	ST:QM:1
+
+This will essentially eat all of the content from the target, 
+so it does not echo back to the terminal.
+
 
 ### ER:hnd:n -- error code response
 
+(details TBD)
 Some example error responses:
 
-	ER:0
+	ER:0:Ok
 	ER:1
 	ER:2
 	ER:4
@@ -421,27 +420,57 @@ Some example error responses:
 - 4 is "not found"
 
 
-### OR:hnd / OW:hnd / OA:hnd -- File open mode
+### OP:hnd:fn:mode -- Open a file
 
-Open the currently set filename (as above using "ST:FN...") for various operations.
-Pass in a single digit for the file handle ID (0-9)
+Open the specified filename for IO operations.
+Pass in a single digit for the file handle ID (1-9).
+"fn" is the name of the file in the current directory.
+"mode" can be the letter "R","W", or "A" signifying 'read',
+'write' or 'append' respectively.
 
 Open file #1 for reading:
 
- 	OR:1
+ 	OP:1:notes.txt:R
 
 Open handle #2 for writing, overwriting existing file or create new:
 
-	OW:2
+	OP:2:output.bin:W
 
 Open handle #6 for append or create new if it doesn't exist:
 
-	OA:6
+	OP:6:log.txt:A
+
+Similar to fopen()
+
+
+### SK:hnd:pos		- seek to the specified position for the handle id
+
+This lets you seek randomly into a file. 'pos' is an integer value, 
+but can also be one of these special words:
+
+- START - seek to the beginning of the file (same as '0')
+- END - seek to the end of the file
+
+If negative values are used, they specify the number of bytes from the
+end of the file.  A position of -1, for example, would make it such 
+that if you read one byte you will get the last byte of the file.
+
+Similar to fseek()
+
+
+### FT:hnd		- tell the position in the file
+
+This will tell you the byte position you're currently in, in the 
+specified file.
+
+Similar to ftell()
 
 
 ### CL:hnd -- close a file, using handle id
 
 Close the requested file by handle id.
+
+Similar to fclose()
 
 
 ### RH:hnd:nbytes -- read n bytes from file
@@ -471,6 +500,8 @@ the above message:
 
     RH:5:0003:452233
 
+Similar to fread()
+
 
 ### WH:hnd:nbytes:hex -- write n bytes in hex to file
 
@@ -478,6 +509,8 @@ Just like the above, but writing it.  Responses are in the form
 WH:hnd:nbytes, like so:
 
     WH:5:4
+
+Similar to fwrite()
 
 
 ### LS:p	-- Request filesystem list entries of path p
@@ -488,8 +521,15 @@ as explained below.
 
 	LS:PATH
 
+The path separator is '/', and fancy paths like "./" and "../" 
+are not allowed.  All absolute paths start with "/" which is the 
+contents of the FS/ directory on the mass storage device.
 
-### LS:t:n:sz	-- a file entry...
+For example, the default path for BASIC programs is "/BASIC/" 
+which can be found on the filesystem at "FS/BASIC/"
+
+
+### LS:t:n:sz	-- Response for a file entry...
 
 - 't' is the type of file, 'D' for directory, 'F' for file. 'E' for end of list
 - 'n' is the name of the file in the directory, directories end with a slash /
@@ -518,7 +558,7 @@ write a sector file out:
 	WS:D:T:S:92384092834098239048209384
 
 
-### CA:f / E.	- capture output from the target to a file
+### CA:f / E.	-- capture output from the target to a file
 
 
 Start capture to the file specified
@@ -528,6 +568,15 @@ Start capture to the file specified
 End the capture session
 
 	CE:
+
+### EE:text, EL:text	-- echo the text back to the target
+
+Just echo the text back, verbatim.  ^G and : are not allowed.
+
+	EE:hello, this is text!
+
+Or echo it back with CR/LF line endings:
+	EL:1000 PRINT "Bloogle"
 
 
 ## Filesystem - Details

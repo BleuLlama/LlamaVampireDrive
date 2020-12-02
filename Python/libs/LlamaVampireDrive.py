@@ -22,6 +22,7 @@ import time         # for sleep
 from GS_Timing import millis, delay
 from os import walk # directory listing
 import math
+from datetime import datetime 
 
 from Transform import Transform
 
@@ -44,7 +45,12 @@ class LlamaVampireDrive( Transform ):
         self.captureToFile = False
         self.file_fh = False
 
-        self.msdelay = 10 # seems ok
+        # every delayCountMax bytes, wait for msDelay milliseconds
+        # after testing this a lot, i've found that this actually
+        # runs quite well and super fast! (relatively)
+        self.delayCountMax = 16
+        self.msDelay = 20
+
         self.ioblocksize = 64
         self.quietmode = False
         self.accumulator = ''
@@ -53,10 +59,28 @@ class LlamaVampireDrive( Transform ):
         self.qprompt = 'V? '
         self.prompt = 'V> '
 
+        self.msg_start = 0x1c
+        self.msg_end = 0x07
+
+        self.rx_mode = 'thru'
+
+        self.vdebug = 0
 
         self.userprint( "{} starting...".format( self.getVersion() ))
         self.userprint( "CTRL-P to interact." )
 
+        self.theSerial = False
+
+        self.VARS = {
+            'CD':'/',
+            'TM':'HHMMSSmmm',
+            'DT':'YYYYMMDD',
+            'QM':'0'
+        }
+
+
+    def SetSerial( self, ser ):
+        self.theSerial = ser
 
     # --------------------------------------------
 
@@ -64,48 +88,80 @@ class LlamaVampireDrive( Transform ):
         """text to be sent but displayed on console"""
         return text
 
+
     def rx(self, text):
         """text received from serial port"""
+        ret = ''
+
+        for ch in text:
+            ret = ret + self.rx_byte( ch )
+
+        return ret
+
+
+    def rx_byte( self, ch ):
+
+        #self.userprint( "{} {} {}".format( ord( ch ), ch , self.rx_mode ))
+        if self.rx_mode == 'thru':
+            if ord( ch ) == self.msg_start:
+                self.rx_mode = 'vampire'
+                self.vampire_message = []
+                self.vampire_acc = ''
+                return ''
+
+        elif self.rx_mode == 'vampire':
+            if ord( ch ) == self.msg_end:
+                self._vampire_store()
+                self.handle_vampire_command( self.vampire_message )
+                self.rx_mode = 'thru'
+                return ''
+            else:
+                self.handle_vampire_byte( ch )
+
+            # always bail when we get a message byte.
+            return ''
+        else :
+            pass
+
 
         if self.captureToFile:
-            self.file_fh.write( text )
+            self.file_fh.write( ch )
 
         # save to a file if we need to
         if self.captureForSAVE:
-            # make sure we're doing this byte by byte..
-            for ch in text:
-                # re-accumulate it into lines:
-                if ch in "\n\r":
-                    # skip empty lines
-                    if self.accumulator == "":
-                        pass
-                    else:
-                        # do something with contented lines
-                        if self.accumulator == 'Ok':
-                            # on Ok, we're done.
-                            self.endCaptureForSave()
-                            return text # make sure we bail out of the loop.
-
-                        elif self.accumulator == 'LIST':
-                            # skip LIST lines
-                            pass
-
-                        else:
-                            # write out the accumulator line
-                            self.save_fh.write( self.accumulator )
-                            self.save_fh.write( '\x0a' )
-
-                    # and reset the accumulator
-                    self.accumulator = ''
-
+            # re-accumulate it into lines:
+            if ch in "\n\r":
+                # skip empty lines
+                if self.accumulator == "":
+                    pass
                 else:
-                    # just add it to the accumulator
-                    self.accumulator = self.accumulator + ch
+                    # do something with contented lines
+                    if self.accumulator == 'Ok':
+                        # on Ok, we're done.
+                        self.endCaptureForSave()
+                        return '' # make sure we bail out of the loop.
+
+                    elif self.accumulator == 'LIST':
+                        # skip LIST lines
+                        pass
+
+                    else:
+                        # write out the accumulator line
+                        self.save_fh.write( self.accumulator )
+                        self.save_fh.write( '\x0a' )
+
+                # and reset the accumulator
+                self.accumulator = ''
+
+            else:
+                # just add it to the accumulator
+                self.accumulator = self.accumulator + ch
 
         # pass it on...
         if self.passthru and not self.quietmode:
-            return text
+            return ch
         return ''
+
 
     def tx(self, text):
         """text to be sent to serial port"""
@@ -118,6 +174,178 @@ class LlamaVampireDrive( Transform ):
 
         return text
 
+    # --------------------------------------------
+    # handlers for stuff from the target...
+    # --------------------------------------------
+
+
+    def cmd_Set( self, args ):
+        key = args[0]
+        value = args[1]
+
+        self.VARS[ key ] = value
+
+        # special handlers
+        if key == 'QM': # quiet mode
+            if value == '1':
+                self.quietmode = True
+            else:
+                self.quietmode = False
+
+        # NOTE: time and date are ignored for this implementation.
+
+
+    def cmd_Get( self, args ):
+        key = args[0]
+        value = ''
+
+        if key == 'TM':
+            now = datetime.now()
+            value = now.strftime( "%H%M%S" )
+
+        elif key == 'DT':
+            now = datetime.now()
+            value = now.strftime( "%Y%m%d" )
+        else: 
+            value = self.VARS[ key ]
+
+        # send out the results to the target
+        self.theSerial.write( ("ST:" + key + ":" + value).encode('utf-8') )
+
+
+    def cmd_Open( self, args ):
+        self.userprint( "Open File: " + ', '.join( args ))
+
+    def cmd_Close( self, args ):
+        self.userprint( "Close: " + ', '.join( args ))
+
+    def cmd_FileTell( self, args ):
+        self.userprint( "File Tell: " + ', '.join( args ))
+
+    def cmd_SeekFile( self, args ):
+        self.userprint( "Seek File: " + ', '.join( args ))
+
+
+    def cmd_ReadHex( self, args ):
+        self.userprint( "Read Hex: " + ', '.join( args ))
+
+
+    def cmd_WriteHex( self, args ):
+        self.userprint( "Write Hex: " + ', '.join( args ))
+
+
+    def cmd_ListDir( self, args ):
+        self.userprint( "List Dir: " + ', '.join( args ))
+
+
+    def cmd_ReadSector( self, args ):
+        self.userprint( "Sector Read: " + ', '.join( args ))
+
+
+    def cmd_WriteSector( self, args ):
+        self.userprint( "Sector Write: " + ', '.join( args ))
+
+
+    def cmd_CaptureStart( self, args ):
+        self.userprint( "Capture Start: " + ', '.join( args ))
+
+
+    def cmd_CaptureEnd( self, args ):
+        self.userprint( "Capture End: " + ', '.join( args ))
+
+
+    # cmd_Echoback
+    #   send text back to the user
+    def cmd_Echoback( self, args, withNl ):
+        content = args[ 0 ].encode('utf-8')
+
+        self.theSerial.write( content )
+        if withNl:
+            self.theSerial.write('\x0a\x0d' )
+
+
+    def handle_vampire_command( self, cmdlist ):
+        device = self.vampire_message[0]
+        command = self.vampire_message[1]
+        args = self.vampire_message[2:]
+
+        #self.userprint( ' Dev: ' + device ) # ignored. placeholder.
+        #self.userprint( ' Cmd: ' + command )
+        #self.userprint( 'CMD: ' + command + ' ( ' + ', '.join( args ) + ' )')
+
+        if command == 'ST':
+            self.cmd_Set( args )
+            return
+
+        if command == 'GT':
+            self.cmd_Get( args )
+            return
+
+        if command == 'OP':
+            self.cmd_OpenFile( args )
+            return
+
+        if command == 'SK':
+            self.cmd_SeekFile( args )
+            return            
+
+        if command == 'FT':
+            self.cmd_FileTell( args )
+            return
+
+        if command == 'CL':
+            self.cmd_Close( args )
+            return
+
+        if command == 'RH':
+            self.cmd_ReadHex( args )
+            return
+
+        if command == 'WH':
+            self.cmd_WriteHex( args )
+            return
+
+        if command == 'LS':
+            self.cmd_ListDir( args )
+            return
+
+        if command == 'RS':
+            self.cmd_ReadSector( args )
+            return
+
+        if command == 'WS':
+            self.cmd_WriteSector( args )
+            return
+
+        if command == 'CA':
+            self.cmd_CaptureStart( args )
+            return
+
+        if command == 'CE':
+            self.cmd_CaptureEnd( args )
+            return
+
+        if command == 'EE':
+            self.cmd_Echoback( args, False )
+            return
+
+        if command == 'EL':
+            self.cmd_Echoback( args, True )
+            return
+
+        self.userprint( 'VMPCMD? ' + ','.join( self.vampire_message ))
+
+
+    def _vampire_store( self ):
+        self.vampire_message.append( self.vampire_acc )
+        self.vampire_acc = ''
+
+
+    def handle_vampire_byte( self, ch ):
+        if ch == ':':
+            self._vampire_store()
+        else :
+            self.vampire_acc = self.vampire_acc + ch
 
     # --------------------------------------------
 
@@ -263,7 +491,7 @@ class LlamaVampireDrive( Transform ):
                         if block[idx] == '\x0a':
                             theSerial.write( '\x0d' )
 
-                        delay( self.msdelay )
+                        delay( self.msDelay )
 
                     sys.stdout.write( "\n\r" )
                     self.progress_line( total, fs )
@@ -306,6 +534,7 @@ class LlamaVampireDrive( Transform ):
                 theSerial.write( "NEW\x0a\x0d" );
                 delay( 100 )
 
+                delayCount = 0
                 while True:
                     block = f.read( self.ioblocksize )
                     total = total + len(block)
@@ -319,7 +548,10 @@ class LlamaVampireDrive( Transform ):
                         if block[idx] == '\x0a':
                             theSerial.write( '\x0d' )
 
-                        delay( self.msdelay )
+                        delayCount = delayCount + 1
+                        if delayCount > self.delayCountMax:
+                            delayCount = 0
+                            delay( self.msDelay )
 
                     self.progress_line( total, fs )
 
@@ -359,9 +591,7 @@ class LlamaVampireDrive( Transform ):
 
         if c in 'pP\x10':
             # vampire character again -> send itself
-            theSerial.write(self.tx_encoder.encode(c))
-            if self.echo:
-                self.console.write(c)
+            theSerial.write( 0x10 )
             return False
 
         if c in 'Dd':   # set millisecond-per-typed-char delay
@@ -374,12 +604,12 @@ class LlamaVampireDrive( Transform ):
                         self.usererror( "{} is out of range (0..1000)".format( thisMsDelay ))
                     else:
                         self.userprint( "set(ms, {})".format( thisMsDelay ))
-                        self.msdelay = thisMsDelay
+                        self.msDelay = thisMsDelay
 
                 except ValueError as e:
                     self.usererror( "{} is not a valid ms duration".format( userline ))
 
-            self.userprint( "Delay = {} ms".format( self.msdelay ));
+            self.userprint( "Delay = {} ms".format( self.msDelay ));
             return False
 
         if c in 'qQ':

@@ -370,6 +370,10 @@ class Miniterm(object):
 
         self.llvampire_character = unichr( 0x10 ) # Vampire command CTRL+P
 
+        # and hack set up the serial port into llvx
+        llvx = self.rx_transformations[0]
+        llvx.SetSerial( self.serial )
+
     def _start_reader(self):
         """Start reader thread"""
         self._reader_alive = True
