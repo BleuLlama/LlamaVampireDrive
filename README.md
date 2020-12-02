@@ -62,7 +62,6 @@ Built upon these are the features for the provided MS BASIC:
 
 - "SAVE" support (enable capture to file, type 'list' store until done)
 - "LOAD" support (just typing in a file)
-- "CHAIN" support ("LOAD" then "RUN" );
 
 
 ## Group 2: Random File IO
@@ -259,19 +258,19 @@ same way, using the same start and end characters.
 
 The messages have a few parts to them:
 
-	^^              START - ESC-^ or 0x9E
+	^^              START - ^\ or 0x1C or 28
 	  D             DEVICE CHANNEL '0'..'9'
 	   CC           COMMAND (two bytes)
 	     ?:         INTENTION: '?' is request, ':' is response
 	      data      DATA (0..x bytes)
-	          ST    END - 0x9C
+	          ST    END - ^G or 0x07 or just plain 7
 
 
-### START OF MESSAGE (0x9E aka [ESC]-[^])
+### START OF MESSAGE - ^\ - 0x1c - 28
 
-The message is signified by sending 0x9E aka [ESC]-[^].  This will 
+The message is signified by sending 0x1c aka [CTRL]-[backslash].  This will 
 switch LLVDrv into message listening mode.  This borrows the
-"Privacy Message" ANSI C1 control command.
+"Control Extension" ANSI C0 control command.
 
 Reference: https://en.wikipedia.org/wiki/C0_and_C1_control_codes
 
@@ -309,12 +308,37 @@ message as it receives it, through the end-of-message indicator.
 ### COMMAND (two bytes)
 
 This indicates what command is to be used.  Unknown commands
-should be ignored and fail silently.  
+should be ignored and fail silently.  Here's a list of all of the 
+commands.
 
-### MESSAGE INTENTION INDICATOR (one byte: '?' or ':')
+ - ST:key:value  	- Set item (also the response)
+ - ST:key		  	- Get item
 
-This indicates whether the message is a request or a response.  Responses
-do not require additional responses.  Requests do require a response.
+ - OR:hnd 			- open for read, using handle id
+ - OW:hnd			- open for write, using handle id
+ - OA:hnd			- open for append, using handle id
+ - CL:hnd			- close a file, using handle id
+
+ - RH:hnd:nb		- request read of a number of bytes (nb)
+ - WH:hnd:nb:hex	- write data to an open file
+
+ - LS:path			- get list of filesystem entries
+ - RS:d:t:s			- read sector (drive, track, sector)
+ - WS:d:t:s:hex		- write sector (drive, track, sector)
+ - CA:filename		- start capture to file
+ - CE:				- End capture session
+
+
+For set and get, these are the available keys:
+ - FN	- filename
+ - CD	- current directory
+ - TM	- Current time HHMMSSmmm or HHMMSS, 24 hour time
+ - DT	- Current date YYYYMMDD
+
+
+### FIELD SEPARATOR (one byte: ':')
+
+This indicates separations between fields.
 
 ### DATA (0..? bytes)
 
@@ -327,11 +351,11 @@ make this slower than CF accesses, but it can be easier to work
 with, and less expensive to deploy, as it could be implemented within
 existing terminal software, or in the PiGFX module for example.
 
-### END OF MESSAGE (0x9C aka [ESC]-[\\])
+### END OF MESSAGE - ^G - 0x07 - 7 (BELL)
+
 
 This indicates the end of the message packet, and we return to normal
-operations mode. This borrows the
-"Strring Terminator" ANSI C1 control command.
+operations mode. This borrows the "Bell" ANSI C0 control command.
 
 Reference: https://en.wikipedia.org/wiki/C0_and_C1_control_codes
 
@@ -347,14 +371,14 @@ Set the filename:
 
 Get the filename:
 
-	ST?FN
+	ST:FN
 
 responds with ST:FN:filename response as above:
 
-	ST:FN:readme.txt;		returned string
+	ST:FN:readme.txt		returned string
 
 
-The list of available settables:
+The list of available settable keys:
 
 - FN - filename for open/write/append
 - CD - /absolute path name to change as the 'current directory'
@@ -369,7 +393,7 @@ Set the current time. be sure to zero-pad values to the right number of places.
 
 Get the current time:
 
-    ST?TM
+    ST:TM
 
 Set the current date, or the response for the above
 
@@ -378,10 +402,10 @@ Set the current date, or the response for the above
 
 Get the current date:
 
-    ST?DT
+    ST:DT
 
 
-### ER:n -- error code response
+### ER:hnd:n -- error code response
 
 Some example error responses:
 
@@ -397,55 +421,72 @@ Some example error responses:
 - 4 is "not found"
 
 
-### OR? / OW? / OA?-- File open mode
+### OR:hnd / OW:hnd / OA:hnd -- File open mode
 
 Open the currently set filename (as above using "ST:FN...") for various operations.
+Pass in a single digit for the file handle ID (0-9)
 
-Open for reading:
+Open file #1 for reading:
 
- 	OR?
+ 	OR:1
 
-Open for writing, overwriting existing file or create new:
+Open handle #2 for writing, overwriting existing file or create new:
 
-	OW?
+	OW:2
 
-Open for append or create new:
+Open handle #6 for append or create new if it doesn't exist:
 
-	OA?
+	OA:6
 
 
-### RH?n -- read n bytes from file
+### CL:hnd -- close a file, using handle id
 
-Read 16 bytes from the currently open file:
+Close the requested file by handle id.
 
-	RH?16
+
+### RH:hnd:nbytes -- read n bytes from file
+
+Read 16 bytes from the file handle 5:
+
+	RH:5:16
 
 Which may respond something like this:
 
-	RH:16:00230A83BCF92929294391249104fcd
+	RH:5:16:00230A83BCF92929294391249104fcd
 
 Note that the 16 responded here indicates the number of bytes read from
-the file.  If fewer than the requested are indicated there, that will
+the file, which expands out to hex, where two ascii characters are used
+to represent one byte.
+
+If fewer than the requested are indicated there, that will
 indicate that an end of file (EOF) has been encountered.  It will truncate 
 the returned record to match this.  For example, if 32 bytes were requested,
 but only three were returned, the response may look like this:
 
-    RH:3:452233
+    RH:5:3:452233
 
 Also note that the field containing the number of bytes is NOT zero padded.
 Zero padded values are optional.  That is to say, this is equivalent to
 the above message:
 
-    RH:0003:452233
+    RH:5:0003:452233
 
 
-### LS?p	-- Request filesystem list entries of path p
+### WH:hnd:nbytes:hex -- write n bytes in hex to file
+
+Just like the above, but writing it.  Responses are in the form
+WH:hnd:nbytes, like so:
+
+    WH:5:4
+
+
+### LS:p	-- Request filesystem list entries of path p
 
 This will request a directory listing, responding with 
 a list of file entries, ending with an empty file listing 
 as explained below.
 
-	LS?PATH
+	LS:PATH
 
 
 ### LS:t:n:sz	-- a file entry...
@@ -462,7 +503,8 @@ Here's an example response of a short directory listing sequence:
 	LS:D:junk;
 	LS:;
 
-### RS?d:t:s / WS:d:t:s:... - Virtual sector IO
+
+### RS:d:t:s / WS:d:t:s:... - Virtual sector IO
 
 These will read and write to the definied drive 'd', track 't' and 
 sector 's'.  The WRS is also used as the response for a RDS command.
@@ -478,13 +520,14 @@ write a sector file out:
 
 ### CA:f / E.	- capture output from the target to a file
 
+
 Start capture to the file specified
 
 	CA:filename
 
 End the capture session
 
-	E.
+	CE:
 
 
 ## Filesystem - Details
