@@ -29,6 +29,30 @@ DigitalIO	= 0x00	; Read buttons, write LEDs
 TMSMemory   = 0x10	; Memory port
 TMSRegister = 0x11	; Control Register Port
 
+; TMS9918 Color codes.
+C_TRANS 	= 0
+
+C_BLACK		= 1
+C_GRAY		= 14
+C_WHITE		= 15
+
+C_DRED		= 6
+C_MRED		= 8
+C_LRED		= 9
+
+C_DYELLOW	= 10
+C_LYELLOW	= 11
+
+C_DGREEN	= 12
+C_MGREEN	= 2
+C_LGREEN	= 3
+
+C_DBLUE		= 4
+C_LBLUE		= 5
+C_CYAN		= 7
+
+C_MAGENTA	= 13
+
 ;;;;;;;;;;;;;;;;;;;;
 ; Emulation Control
 EmulatorControl	= 0xEE

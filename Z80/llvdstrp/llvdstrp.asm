@@ -1,42 +1,38 @@
-; example code for a BASIC USR function
+; Bootstrap for the BASIC->ROM LOADER 
+; for the LlamaVampireDrive system
+;
+;  This code is a payload on a BASIC program that will poke it into 
+;  memory at 0xF800, then call USR(0) to trigger it.
+;
+;
+;  This code itself will:
+;	- make the LLVD calls to load "BOOT.ROM" to 0x0000...
+;	- swap out the ROM for RAM at (0x0000-0x8000)
+;	- call rst(0) / jump to 0x0000
+;
+;
+;  This code assumes a RC2014 system with:
+;	- NASCOM BASIC ROM at RUN
+;	- 6850 ACIA at IO 0x80
+;	- Pageable ROM module
+;	- 64k RAM module
+;  And is the precursor to loading CP/M
 
-DEINT	   = 0x0a07
-ABPASS	   = 0x117D
-
-; TMS COLORS
-C_TRANS 	= 0
-
-C_BLACK		= 1
-C_GRAY		= 14
-C_WHITE		= 15
-
-C_DRED		= 6
-C_MRED		= 8
-C_LRED		= 9
-
-C_DYELLOW	= 10
-C_LYELLOW	= 11
-
-C_DGREEN	= 12
-C_MGREEN	= 2
-C_LGREEN	= 3
-
-C_DBLUE		= 4
-C_LBLUE		= 5
-C_CYAN		= 7
-
-C_MAGENTA	= 13
 
 .include "../Common/hardware.asm"
+.include "../Common/basicusr.asm"
 
-        .module BASIC_USR
+        .module LLVD_STRAP
 .area   .CODE (ABS)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; entry point
 
-.org	0xF800
+;.org	0xF800
+
+.org ENTRYORG
+
 usr:
     ld  a, #0x00    ; bit 0, 0x01 is ROM Disable
                 ; = 0x00 -> ROM is enabled
