@@ -4,6 +4,11 @@ CAPTURE.TXT
 *junk
 junk*
 
+# Z80 code
+*.ihx
+*.lst
+*.map
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
