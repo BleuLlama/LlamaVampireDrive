@@ -7,7 +7,7 @@ A transparent over-the-serial-console storage solution.
 This drive system is meant to be a cheap (free) mass storage system for
 serial-based computer systems that might not otherwise have a local
 storage system, or may have one but it is inconvenient to transfer
-content onto.  It may not be fast.
+content onto.  It's not meant for speed.
 
 The primary use for this, for me, is to give a mass-storage solution
 to my RC2014 Z80 vintage-like computer, which does not have any 
@@ -16,6 +16,10 @@ storage on it at all, other than volatile RAM.
 The good things about this drive system is that it will be transparent
 to the user, and provide all of the files and potentially resources
 of the terminal computer to the target computer.
+
+It also extends the ROM BASIC to add LOAD, SAVE, and CATALOG 
+immediate functions.  These functions operate at around 1024 bytes
+per second. 
 
 There are three phases of development for this as I see it. These 
 are not necessarily dependent on each other.
@@ -29,7 +33,7 @@ In this document, <CR> signifies a line ending. Actual line endings
 can be <CR> or <LF>.
 
 For the sake of clarity, the two computers involved with a transaction
-will be categorized like so:
+will be categorized as follows:
 
 ## Terminal
 
@@ -40,10 +44,11 @@ with the vampire drive extensions.
 
 ## Target
 
-This is the device that the user is connecting to.  In my case, the target is a 
-RC2014 Z80 computer.  It has a FTDI connector providing a TTL-level RS232 interface.
-I have mine connected through this interface to a USB-Serial device on my terminal
-computer (my Mac).
+This is the device that the user is connecting to.  In my case, the
+target is a RC2014 Z80 computer.  It has a FTDI connector providing
+a TTL-level RS232 interface.  I have mine connected through this
+interface to a USB-Serial device on my terminal computer (my Mac).
+
 
 # Features and Development Groups
 
@@ -63,13 +68,15 @@ Built upon these are the features for the provided MS BASIC:
 - "SAVE" support (enable capture to file, type 'list' store until done)
 - "LOAD" support (just typing in a file)
 
+As of December 2, 2020, this feature set is implemented in the Python
+version of the system.
 
 ## Group 2: Random File IO
 
 Group 2 adds random file IO to the mix, providing an interface for the target
 to open files for read/write, seek to specific file positions, read/write 
-specific numbers of bytes, close the file.  It will support 16 simultaneous 
-file handles.
+specific numbers of bytes, close the file.  It supports multiple 
+files open simultaneously.
 
 
 ## Group 3: Additional Resources
@@ -89,7 +96,7 @@ serial interface.
 This is a device that plugs into the FTDI header on the target, and provides
 another FTDI header for the terminal to connect to.  This device has its
 own SD card for storage, and transparently provides this entire 
-interface.
+interface.  This uses the above C code to implement the storage side of things.
 
 -----
 
@@ -113,8 +120,8 @@ will provide a listing of this directory as well.
 
 ## FS/DRV
 
-This directory contains the virtual drive files.  More info on this
-later in this document
+This directory contains the virtual drive/track/sector files.
+More info on this later in this document.
 
 
 -----
@@ -131,25 +138,27 @@ something like this:
 
     [User]---[Keyboard]---[   -> (LLVDrv commands)
                               -> (user input)
+							 <-> (disk)
 
                                  ( Miniterm+LLVDrv )
 
                                      (LLVDrv commands) <-
-                                                (disk) -> 
-                                          (user input) -> ]---[USB Serial]---[RC2014]
+                                                (disk) <-> 
+                                          (user input)  -> ]---[USB Serial]---[RC2014]
 
 
 
 # Protocol: From Terminal ^P
 
-LLVDrv commands may have a "capture from Terminal" version, along with 
-their standard "escape sequence from target" protocol.
+There are set of LLVDrv commands that can be operated from the terminal
+side, however there are also some that have support from the target via
+a protocol described later.
 
-This interface is based on a simple control key, then a letter (or multiple 
-letters).  The control key is ^P.  Naturally, 
+The terminal interface is based on a simple control key, then a 
+letter (or multiple letters).  The control key is ^P (control-p).  Naturally, 
 to actually send a ^P to the target, you would press it a second time.
 
-When the system is doing one of its tasks, it may ignore the ^A key pressed,
+When the system is doing one of its tasks, it may ignore the ^P key pressed,
 for example when binary data or text file data is being sent to the target,
 as that takes place further down the chain.
 
@@ -258,15 +267,15 @@ same way, using the same start and end characters.
 
 The messages have a few parts to them:
 
-	^^              START - ^\ or 0x1C or 28
+	^^              START - ^\, hex 0x1C, or decimal 28
 	  D             DEVICE CHANNEL '0'..'9'
 	   CC           COMMAND (two bytes)
 	     ?:         INTENTION: '?' is request, ':' is response
 	      data      DATA (0..x bytes)
-	          ST    END - ^G or 0x07 or just plain 7
+	          ST    END - ^G, hex 0x07 or decimal 7
 
 
-### START OF MESSAGE - ^\ - 0x1c - 28
+### START OF MESSAGE - ^\ - hex 0x1c - decimal 28
 
 The message is signified by sending 0x1c aka [CTRL]-[backslash].  This will 
 switch LLVDrv into message listening mode.  This borrows the
@@ -339,7 +348,7 @@ For set and get, these are the available keys:
  - QM	- Quiet Mode (1/0)
 
 
-### FIELD SEPARATOR (one byte: ':')
+### FIELD SEPARATOR  - : - hex 0x3a - decimal 58 (colon)
 
 This indicates separations between fields.
 
@@ -354,7 +363,7 @@ make this slower than CF accesses, but it can be easier to work
 with, and less expensive to deploy, as it could be implemented within
 existing terminal software, or in the PiGFX module for example.
 
-### END OF MESSAGE - ^G - 0x07 - 7 (BELL)
+### END OF MESSAGE - ^G - hex 0x07 - decimal 7 (BELL)
 
 
 This indicates the end of the message packet, and we return to normal
@@ -446,9 +455,8 @@ Similar to fopen()
 ### SK:hnd:pos		- seek to the specified position for the handle id
 
 This lets you seek randomly into a file. 'pos' is an integer value, 
-but can also be one of these special words:
+but can also be a word:
 
-- START - seek to the beginning of the file (same as '0')
 - END - seek to the end of the file
 
 If negative values are used, they specify the number of bytes from the
@@ -461,7 +469,13 @@ Similar to fseek()
 ### FT:hnd		- tell the position in the file
 
 This will tell you the byte position you're currently in, in the 
-specified file.
+specified file:
+
+    FT:2
+
+Response is like so:
+
+    FT:2:183
 
 Similar to ftell()
 

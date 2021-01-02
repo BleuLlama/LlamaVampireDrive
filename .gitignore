@@ -1,6 +1,8 @@
 .DS_Store
 SAVED.BAS
 CAPTURE.TXT
+*junk
+junk*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

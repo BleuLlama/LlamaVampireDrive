@@ -5,19 +5,25 @@
 # by default 'miniterm' ran at 9600 baud, but i changed it to 
 # be 115200 so that it would not be necessary to set it on the cmd line
 
+PORTNAME := $(shell python find_usb_serial.py --best)
+
 all:	dev
 .PHONY: all
 
 dev:
-	python llvdrvterm.py /dev/cu.usbmodem01871 115200
+ifeq '$(PORTNAME)' 'NONE'
+	@echo "Unable to detect USB serial device."
+else
+	@echo "Autodetected: $(PORTNAME)"
+	python llvdrvterm.py $(PORTNAME) 115200
+endif
 .PHONY: dev
 
 sane:
-	python miniterm.py /dev/cu.usbmodem01871 115200
+	python miniterm.py $(PORTNAME) 115200
 .PHONY: sane
 
-
 run:
-	python llvdrvterm.py - 115200
+	python $(PORTNAME) - 115200
 .PHONY: run
 

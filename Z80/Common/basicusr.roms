@@ -1,0 +1,18 @@
+# program space
+begin program
+0xf800  0x07FF  basicusr.rom	program_1
+end
+
+# graphics roms
+begin graphics
+end
+
+# color proms
+begin color
+end
+
+# sound proms
+begin sound
+end
+
+

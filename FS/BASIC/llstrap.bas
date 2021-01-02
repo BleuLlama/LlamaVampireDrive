@@ -1,40 +1,26 @@
-10 print "Llichen 80 Kickstart"
-20 OUT 0,0
+10 print "LL-Kickstart-USR() v1.0"
 
-100 REM == Start up video
-110 MEM=&H10
-120 REG=&H11
-130 REM Register settings for bitmap mode (0/gray)
-140 DATA 0,208,0,0,1,0,0,14
-150 FOR I = 0 TO 7
-160 READ V
-170 OUT REG, V
-180 OUT REG, (I OR &h80)
-190 NEXT
+20 REM == poke at 0xF800 ==
+30 let mb=&HF800
 
-200 REM == poke at 0xF800 ==
-210 print "Poking..";
-220 mb = &HF800
-230 read op
-240 if op = 999 then goto 280
-250 poke mb, op
-260 let mb = mb + 1
-270 goto 230
-280 print "..Done."
+100 print "Poking in the program...";
+110 read op
+120 if op = 999 then goto 160
+130 poke mb, op
+140 let mb = mb + 1
+150 goto 110
+160 print "...Done!"
 
-300 REM == JP start address (c3 00 f8) jp f800 ==
-310 mb = &H8048
-320 poke mb, &HC3
-330 poke mb+1, &H00
-340 poke mb+2, &HF8
+200 REM == JP start address (c3 00 f8) jp f800 ==
+210 mb = &H8048
+220 poke mb, &HC3
+230 poke mb+1, &H00
+240 poke mb+2, &HF8
 
-400 REM change color to gr on ltgry
-410 OUT REG, 239
-420 OUT REG, ( 7 OR &H80)
+250 print "Calling usr()..."
+260 print usr(0)
+270 end
 
-450 print "Calling usr()..."
-460 print usr(0)
-470 end
 9000 REM == program == 
 9001 DATA 62,0,211,0,229,33,37,248,205,50
 9003 DATA 248,225,33,82,248,205,90,248,62,4
@@ -49,4 +35,4 @@
 9021 DATA 211,17,12,35,16,244,201,245,62,76
 9023 DATA 211,129,241,197,6,255,197,6,255,16
 9025 DATA 254,193,16,248,193,201,999
-9027 REM - Created Sun Apr 21 18:20:43 2019
+9027 REM - Created Fri Jan  1 19:22:46 2021

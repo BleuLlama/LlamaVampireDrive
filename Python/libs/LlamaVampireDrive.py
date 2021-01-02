@@ -78,6 +78,8 @@ class LlamaVampireDrive( Transform ):
             'QM':'0'
         }
 
+        self.FILES = {}
+
 
     def SetSerial( self, ser ):
         self.theSerial = ser
@@ -213,17 +215,38 @@ class LlamaVampireDrive( Transform ):
         self.theSerial.write( ("ST:" + key + ":" + value).encode('utf-8') )
 
 
-    def cmd_Open( self, args ):
-        self.userprint( "Open File: " + ', '.join( args ))
+    def cmd_FileOpen( self, args ):
+        self.userprint( "File Open: " + ', '.join( args ))
+        handle = args[0]
+        fname = args[1]
+        mode = args[2]
 
-    def cmd_Close( self, args ):
-        self.userprint( "Close: " + ', '.join( args ))
+        print "OPEN {} FOR {} AS {}".format( fname, mode, handle )
+
+        self.FILES[ handle ] = open( self.filepath + fname, mode+"b" )
+
+
+    def cmd_FileClose( self, args ):
+        handle = args[0]
+        print "FILECLOSE #{}".format( handle )
+        self.FILES[ handle ].close();
+        self.FILES[ handle ] = False
 
     def cmd_FileTell( self, args ):
-        self.userprint( "File Tell: " + ', '.join( args ))
+        handle = args[0]
+        value = self.FILES[ handle ].tell()
+        self.userprint( "FILETELL #{} -> {}".format( handle, value ))
+        self.theSerial.write( ("FT:" + handle + ":" + value).encode('utf-8') )
 
-    def cmd_SeekFile( self, args ):
-        self.userprint( "Seek File: " + ', '.join( args ))
+
+    def cmd_FileSeek( self, args ):
+        handle = args[0]
+        value = args[1]
+        self.userprint( "FILESEEK #{} TO {}".format( handle, value ))
+        if value == "END":
+            self.FILES[ handle ].seek( 0, 2 )
+        else:
+            self.FILES[ handle ].seek( int( value ) )
 
 
     def cmd_ReadHex( self, args ):
@@ -231,27 +254,49 @@ class LlamaVampireDrive( Transform ):
 
 
     def cmd_WriteHex( self, args ):
-        self.userprint( "Write Hex: " + ', '.join( args ))
+        handle = args[0]
+        nbytes = int( args[1] )
+        data = args[2]
+        buf = [0]*nbytes
 
+        self.userprint( "WRITE #{} [{}] => {}".format(handle, nbytes, data ))
+
+        for i in range( 0, nbytes ):
+            bdata = data[ i*2:(i*2)+2 ]
+            b = int( bdata, 16 )
+            #print( "byte {} is {} {}". format( i, bdata, b ))
+            buf[i] = b
+
+        self.FILES[ handle ].write( bytearray( buf ))
 
     def cmd_ListDir( self, args ):
-        self.userprint( "List Dir: " + ', '.join( args ))
+        path = args[0]
+        self.userprint( "LS {}".format( path ) )
 
 
     def cmd_ReadSector( self, args ):
-        self.userprint( "Sector Read: " + ', '.join( args ))
+        drive = args[0]
+        track = args[1]
+        sector = args[2]
+
+        self.userprint( "SEC RD D{} T{} S{}".format( disk, track, sector ) )
 
 
     def cmd_WriteSector( self, args ):
-        self.userprint( "Sector Write: " + ', '.join( args ))
+        drive = args[0]
+        track = args[1]
+        sector = args[2]
+        data = args[3]
+        self.userprint( "SEC WR D{} T{} S{} {}".format( disk, track, sector, data ) )
 
 
     def cmd_CaptureStart( self, args ):
-        self.userprint( "Capture Start: " + ', '.join( args ))
+        fname = args[0]
+        self.userprint( "CAPTURE TO {}".format( fname ))
 
 
     def cmd_CaptureEnd( self, args ):
-        self.userprint( "Capture End: " + ', '.join( args ))
+        self.userprint( "CAPTURE END" )
 
 
     # cmd_Echoback
@@ -265,9 +310,15 @@ class LlamaVampireDrive( Transform ):
 
 
     def handle_vampire_command( self, cmdlist ):
-        device = self.vampire_message[0]
-        command = self.vampire_message[1]
-        args = self.vampire_message[2:]
+        device = cmdlist[0]
+        command = ''
+        args = []
+        
+        if len( cmdlist ) > 1:
+            command = cmdlist[1]
+
+        if len( cmdlist ) > 2:
+            args = cmdlist[2:]
 
         #self.userprint( ' Dev: ' + device ) # ignored. placeholder.
         #self.userprint( ' Cmd: ' + command )
@@ -282,11 +333,11 @@ class LlamaVampireDrive( Transform ):
             return
 
         if command == 'OP':
-            self.cmd_OpenFile( args )
+            self.cmd_FileOpen( args )
             return
 
         if command == 'SK':
-            self.cmd_SeekFile( args )
+            self.cmd_FileSeek( args )
             return            
 
         if command == 'FT':
@@ -294,7 +345,7 @@ class LlamaVampireDrive( Transform ):
             return
 
         if command == 'CL':
-            self.cmd_Close( args )
+            self.cmd_FileClose( args )
             return
 
         if command == 'RH':
@@ -360,8 +411,7 @@ class LlamaVampireDrive( Transform ):
     def getVersion( self ):
         return "LlamaVampireDrive ({})".format( self.version )
 
-
-    def setFilename( self, filename ):
+    def setBasicFilename( self, filename ):
         if filename == "":
             return false
         self.basic_filename = filename
@@ -500,23 +550,52 @@ class LlamaVampireDrive( Transform ):
             self.usererror( "{}: {} ---\n".format(filename, e))
         return False
 
+    def get_DirListFiles( self, filepath ):
+        for (dirpath, dirnames, filenames) in walk( filepath ):
+            #f.extend(filenames)
+            break
+        return sorted( filenames, key=lambda s: s.lower() )
+
+    def get_DirListDirs( self, filepath ):
+        for (dirpath, dirnames, filenames) in walk( filepath ):
+            #f.extend(filenames)
+            break
+        return sorted( dirnames, key=lambda s: s.lower() )
+
 
     # cmd_BASIC_Catalog
     #   Send a file listing of the current file path to the terminal
     def cmd_BASIC_Catalog( self ):
-        f = []
         for (dirpath, dirnames, filenames) in walk( self.basic_filepath ):
             #f.extend(filenames)
             break
-        for fn in filenames:
+
+        #dirnames.sort()
+        #filenames.sort()
+
+        for fn in sorted( dirnames, key=lambda s: s.lower() ):
+            print "    {:>3} {:>5} {}/".format( '~', 'DIR', fn )
+
+        idx = 0
+        for fn in sorted( filenames, key=lambda s: s.lower() ):
             fs = os.stat( self.basic_filepath + fn ).st_size
-            print "    {:>5}  {}".format( fs, fn )
+            print "    {:>3} {:>5} {}".format( idx, fs, fn )
+            idx = idx+1
 
 
     # cmd_BASIC_Load
     #   pretty much the same thing, but it inhibits echo, and types "NEW" first
     def cmd_BASIC_Load( self, filename, theSerial ):
         fs = 0
+
+        try:
+            if filename.lstrip('-').isdigit():
+                flist = self.get_DirListFiles( self.basic_filepath )
+                filename = flist[ int( filename ) ]
+        except IndexError as e:
+            self.usererror( "{}: {} ---\n".format(filename, e) )
+            return False
+
         try:
             fs = os.stat( self.basic_filepath + filename ).st_size
         except OSError as e:
@@ -531,7 +610,7 @@ class LlamaVampireDrive( Transform ):
                 self.progress_line( total, fs )
 
                 self.passthru = False
-                theSerial.write( "NEW\x0a\x0d" );
+                theSerial.write( "\x03\x0a\x0dNEW\x0a\x0d" );
                 delay( 100 )
 
                 delayCount = 0
@@ -647,7 +726,7 @@ class LlamaVampireDrive( Transform ):
             if filename == "":
                 filename = self.basic_filename
             else:
-                self.setFilename( filename )
+                self.setBasicFilename( filename )
 
             self.cmd_BASIC_Load( filename, theSerial )
             return False
@@ -660,7 +739,7 @@ class LlamaVampireDrive( Transform ):
                 if filename == "":
                     filename = self.basic_filename
                 else:
-                    self.setFilename( filename )
+                    self.setBasicFilename( filename )
 
             self.userprint( "Saving " + self.basic_filename )
 
