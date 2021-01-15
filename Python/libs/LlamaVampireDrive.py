@@ -21,6 +21,7 @@ from serial.tools import hexlify_codec
 import time         # for sleep
 from GS_Timing import millis, delay
 from os import walk # directory listing
+from os import path # path tools
 import math
 from datetime import datetime 
 
@@ -48,8 +49,11 @@ class LlamaVampireDrive( Transform ):
         # every delayCountMax bytes, wait for msDelay milliseconds
         # after testing this a lot, i've found that this actually
         # runs quite well and super fast! (relatively)
-        self.delayCountMax = 16
-        self.msDelay = 20
+        self.delayCountMax = 8
+        self.msDelay = 10
+
+        # for direct-connected pi, 16/10 works well
+        # for usb-serial or bluetooth, 8/25 usually works
 
         self.ioblocksize = 64
         self.quietmode = False
@@ -217,14 +221,25 @@ class LlamaVampireDrive( Transform ):
 
     def cmd_FileOpen( self, args ):
         self.userprint( "File Open: " + ', '.join( args ))
+
         handle = args[0]
         fname = args[1]
+        fullfpath = self.filepath + fname
         mode = args[2]
+
+        if not path.exists( fullfpath ):
+            print "ERROR:  {}: File does not exist!".format( fullfpath )
+            return
 
         print "OPEN {} FOR {} AS {}".format( fname, mode, handle )
 
-        self.FILES[ handle ] = open( self.filepath + fname, mode+"b" )
+        try:
+            self.FILES[ handle ] = open( fullfpath, mode+"b" )
 
+        except IOError:
+            print "ERROR:  {}: IO Error opening file.".format( fullfpath )
+        except OSError:
+            print "ERROR:  {}: Error opening file.".format( fullfpath )
 
     def cmd_FileClose( self, args ):
         handle = args[0]
@@ -320,9 +335,8 @@ class LlamaVampireDrive( Transform ):
         if len( cmdlist ) > 2:
             args = cmdlist[2:]
 
-        #self.userprint( ' Dev: ' + device ) # ignored. placeholder.
-        #self.userprint( ' Cmd: ' + command )
-        #self.userprint( 'CMD: ' + command + ' ( ' + ', '.join( args ) + ' )')
+        self.userprint( '\n Dev: ' + device ) # ignored. placeholder.
+        self.userprint( ' Cmd: ' + command + ' ( ' + ', '.join( args ) + ' )\n')
 
         if command == 'ST':
             self.cmd_Set( args )
@@ -463,6 +477,7 @@ class LlamaVampireDrive( Transform ):
     ^Px                 ..and E(x)it capture to the file
 
   Utility commands:
+    ^Pr                 (r)eset the target via reset_target.py
     ^Pb                 (b)oot - LOAD and RUN the program BOOT.BAS
     ^Ph                 Display this (h)elp text (or ^P^H or ^PH etc)
     ^P^P                Send CTRL-P
@@ -651,7 +666,7 @@ class LlamaVampireDrive( Transform ):
     # cmd_Reset
     #   do whatever's necessary to reset the target (gpio toggle, etc)
     def cmd_Reset(self, theSerial):
-        self.userprint( "Reset" )
+        os.system( "../Tools/reset_target.py" );
         theSerial.flush()
 
     # handle_user_command
