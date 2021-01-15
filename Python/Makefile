@@ -5,7 +5,7 @@
 # by default 'miniterm' ran at 9600 baud, but i changed it to 
 # be 115200 so that it would not be necessary to set it on the cmd line
 
-PORTNAME := $(shell python find_usb_serial.py --best)
+PORTNAME := $(shell python ../Tools/find_usb_serial.py --best)
 
 all:	dev
 .PHONY: all
