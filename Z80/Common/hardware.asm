@@ -1,6 +1,6 @@
 ; RC2014 Hardware Defines
 ;
-;          2016-2020 Scott Lawrence
+;          2016-2021 Scott Lawrence
 ;
 ;  This code is free for any use. MIT License, etc.
 ;
@@ -10,26 +10,57 @@
 ; some defines we will use (for ports)
 
 ;;;;;;;;;;;;;;;;;;;;
-; RC2014 MC6850 ACIA Serial IO Module
-TermStatus	= 0x80	; Status on MC6850 for terminal comms
-TermData	= 0x81	; Data on MC6850 for terminal comms
-  DataReady	= 0x01  ;  bit to check if there's data ready
+; 	RC2014 MC6850 ACIA Serial IO Module
+ACIA_Status	= 0x80	; Status on MC6850 for terminal comms
+ACIA_Data	= 0x81	; Data on MC6850 for terminal comms
+  ACIA_Ready	= 0x01  ;  bit to check if there's data ready
+
 
 ;;;;;;;;;;;;;;;;;;;;
 ; RC2014 Paged ROM Module
-MemPage  	= 0x38	; write to toggle ROM-RAM
-					; reset to force it to ROM
+;  writes to this port will toggle 0x0000-0x7FFF from RAM to ROM.
+;  Resetting the system forces it back to ROM.
+Page_Toggle  	= 0x38	
+
 
 ;;;;;;;;;;;;;;;;;;;;
-; RC2014 Digital IO Module
-DigitalIO	= 0x00	; Read buttons, write LEDs
+; 	RC2014 Digital IO Module
+; reads: bit values for buttons
+; writes: sets the LEDs
+DIGIO_0	= 0x00	; Configured as port 0x00
+DIGIO_1	= 0x01	; Configured as port 0x01
+DIGIO_2	= 0x02	; Configured as port 0x02
+
+; this is the one we're using:
+DigitalIO 	= DIGIO_0
+
 
 ;;;;;;;;;;;;;;;;;;;;
-; TMS9918 Video Card - Configured as SORD-M5
-TMSMemory   = 0x10	; Memory port
-TMSRegister = 0x11	; Control Register Port
+; 	TMS9918A Video Card
+;	https://github.com/jblang/TMS9918A
 
-; TMS9918 Color codes.
+; settings for MSX-1
+;	J4: 5th,  J6: right,  JP1: upper,  JP2: upper
+TMS_MSX_MEM = 0x98
+TMS_MSX_REG = 0x99
+
+; settings for ColecoVision
+;	J4: 6th,  J6: left,  JP1: lower,  JP2: lower
+TMS_MSX_MEM = 0xBE
+TMS_MSX_REG = 0xBF
+
+; settings for SORD M5
+;	J4: 1st,  J6: right,  JP1: lower,  JP2: lower
+TMS_SORD_MEM = 0x10
+TMS_SORD_REG = 0x11
+
+
+; this is the one we're using:
+TMS_Memory   = TMS_SORD_MEM	; Memory port
+TMS_Register = TMS_SORD_REG	; Control Register Port
+
+
+; Color codes.
 C_TRANS 	= 0
 
 C_BLACK		= 1
@@ -53,8 +84,9 @@ C_CYAN		= 7
 
 C_MAGENTA	= 13
 
+
 ;;;;;;;;;;;;;;;;;;;;
-; Emulation Control
+; 	Emulation Control
 EmulatorControl	= 0xEE
 	; Read for version of emulator:
 	;   'A' for RC2014 emu (32k)    v1.0 2016/10/10

@@ -3,4 +3,17 @@
 
 TARGBASE := llvdstrp
 
+DEPFILES := \
+	llvdstrp.asm \
+	toolbox.asm \
+
 include ../Common/basicusr.mak
+
+test: clean all
+	
+
+
+edit:
+	open llvdstrp.asm toolbox.asm ../Common/hardware.asm
+
+.PHONY: edit

@@ -34,125 +34,41 @@
 .org ENTRYORG
 
 usr:
-    ld  a, #0x00    ; bit 0, 0x01 is ROM Disable
-                ; = 0x00 -> ROM is enabled
-                ; = 0x01 -> ROM is disabled
-    out (RomDisable), a ; restore ROM to be enabled
-
+	; print out a splash
 	push	hl
-	ld		hl,	#splash
+	ld		hl,	#t_splash
 	call	Print
 	pop		hl
 
-	ld		hl, #T99GFX1
-	call	TMSRegSend
+	; page swap to all-RAM
+	ld 		a, #1
+	out		(Page_Toggle), a
+	ld 		hl, #t_db0
+	call 	Print
 
-	ld		a, #4
-	call	TMSColor
+	; send the bot file request
+	ld		hl, #t_bootfile
+	call	LLVD_Open0
 
-	call	Delay
+	; catch the response
+	ld		hl, #0x0000
+	call	LLVD_R0_16
 
-	ld		a, #33
-	call	TMSColor
-
-	jp 		ABPASS
+	; page swap back to ROM
+	ld 		a, #1
+	out		(Page_Toggle), a
+	ld 		hl, #t_db1
+	call 	Print
 
 	; return to BASIC
+	ld		a, #0x10
+	ld		b, #0x92	; 0x1092 -> 4242.d
 	jp		ABPASS
 
-splash: .asciz  "Working...\n\r"
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; console text
+t_bootfile:	.asciz "ROMs/boot.bin"
+t_splash:	.asciz "Starting up...\n\r"
+t_db0:		.asciz "RAM bankswitched!\n\r"
+t_db1:		.asciz "And we're back!\n\r"
 
-; Print
-;   output the c-string pointed to by HL to the console
-;   string must be null terminated (asciz)
-Print:
-    push    af
-	to_loop:
-		;{ 
-			ld  	a, (hl)     ; get the next character
-			cp  	#0x00       ; is it a NULL?
-			jr  	z, termz    ; if yes, we're done here.
-
-			call    PutCh
-			inc 	hl      ; go to the next character
-			jr  	to_loop     ; do it again!
-		; }
-	termz:
-	pop 	af
-    ret         ; we're done, return!
-
-
-PutCh:
-	push	af
-	_OutWait:
-		; {
-			in		a, (TermStatus)
-			and		#0x02
-			jr		z, _OutWait
-		; }
-	pop		af
-    out 	(TermData), a   ; echo
-    ret
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Video stuff
-
-TMSColor:
-	out		(VidReg), a
-	ld		a, #135
-	out		(VidReg), a
-	ret
-
-VidMem	= 0x10
-VidReg	= 0x11
-
-T99GFX1: 	.byte 0, 208, 0, 0, 1, 0, 0, 244
-
-
-
-TMSRegSend:
-	ld 	b,	#8
-	ld 	c,	#0
-	;{
-		gv2:
-			ld		a, (hl)
-			out		(VidReg), a
-
-			ld		a, c
-			or		a, #0x80
-			out		(VidReg), a
-
-			inc		c
-			inc		hl
-			djnz	gv2
-	; }
-	ret
-
-
-
-; delay of 255*255 is something like 1/10 second or so
-Delay:
-	; {
-		push	af
-		ld		a, #'L
-		out		(TermData), a
-		pop		af
-	; }
-
-	push	bc
-	ld		b, #255
-__d2:
-	; { 
-		push	bc
-		ld		b, #255
-		djnz	.
-		pop		bc
-		djnz	__d2
-	; }
-	pop		bc
-
-	ret	
+.include "toolbox.asm"

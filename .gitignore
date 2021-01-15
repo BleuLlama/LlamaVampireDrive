@@ -4,6 +4,8 @@ CAPTURE.TXT
 *junk
 junk*
 
+*.swp
+
 # Z80 code
 *.ihx
 *.lst
