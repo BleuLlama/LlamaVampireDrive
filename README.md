@@ -78,6 +78,49 @@ to open files for read/write, seek to specific file positions, read/write
 specific numbers of bytes, close the file.  It supports multiple 
 files open simultaneously.
 
+There are two parts of group 2:
+
+### Group 2A: Lightweight IO
+
+This is a minimal version of the file interface, specifically for low-code
+bootloaders.  A springboard boot loader will require just this set of 
+functionality:
+
+- One file
+- Read operations only
+- No directory change support
+- No Seek support
+- No channel support (ignored)
+- No Close file (not needed)
+
+That is to say, this group has these specific operations
+
+>  OP:0:<filename>:r
+
+Open "filename" as file handle 0 for read
+
+>  RH:0:<nb>
+
+Read the requested number of bytes from file handle 0
+
+>  GT:VI
+
+Get the version information
+
+
+
+### Group 2B: The rest
+
+On top of the above, 2B adds:
+
+- Multiple file handles
+- File writing
+- File positioning/seek
+- Virtual drives
+- Capture to file
+- Type from file
+- Channel !0 forwarding
+
 
 ## Group 3: Additional Resources
 
@@ -195,6 +238,8 @@ The user is prompted for the filename to use.
 
 ## Miscellaneous
 
+ - ^Pr			reboot the target via Tools/reset_target.py
+
  - ^Pb			start the boot sequence on the target
 
  - ^P^P			send [CTRL]-[p]
@@ -207,9 +252,6 @@ The user is prompted for the filename to use.
 
  - ^Px			end a capture or autotype session (or do nothing)
 
-## Future Commands
-
- - ^Pr			reboot the target system (TBD)
 
 
 
@@ -346,6 +388,7 @@ For set and get, these are the available keys:
  - TM	- Current time HHMMSSmmm or HHMMSS, 24 hour time
  - DT	- Current date YYYYMMDD
  - QM	- Quiet Mode (1/0)
+ - VI - Version Info
 
 
 ### FIELD SEPARATOR  - : - hex 0x3a - decimal 58 (colon)
@@ -384,6 +427,7 @@ The list of available settable keys:
 - TM - current time in zero-padded 24 hour format HHMMSSmmm : hours, minutes seconds, millis (optional)
 - DT - current date in zero-padded format YYYYmmdd : year, month, day
 - QM - quiet mode (inhibit echo to terminal), 1 = quiet, 0 = NOISY
+- VI - version string w/capabilities of the host LLVD controller
 
 
 
