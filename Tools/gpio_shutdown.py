@@ -64,6 +64,7 @@ def Shutdown(channel):
 
     if ledIs == 0:
         flash( 0.1 )
+        os.system("sync")
         os.system("shutdown -h now")
 
 
