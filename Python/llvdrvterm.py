@@ -2,8 +2,11 @@
 #
 # llvdrvterm.py
 #   a hacked version of miniterm.py, including vampire mass storage interface
+#   Modified version by Scott Lawrence <yorgle@gmail.com>
 #
 #  Version / Changelog:
+#
+#  v0.02 - 2021-01-18 - Added -a --autoport for doing the autoport search internally
 #
 #  v0.01 - 2020-11-24 - Initial version
 #            changed default baud rate to 115200
@@ -789,6 +792,39 @@ class Miniterm(object):
            eol=key_description('\x0c'))
 
 
+def bl_find_comport( needle ):
+	needles = [ 'arduino', 'usbserial', 'usbmodem', 'ch340', 'wchusb', 'hc06', 'ttyS', 'ttyAM' ]
+
+	# if the user had one, let's look for that one first...
+	if needle != None and needle != True:
+		needles.insert( 0, needle )
+
+	# get the list of available comports
+	ports = list( serial.tools.list_ports.comports() )
+
+	# note about devices...
+	# AMA devices show up, SER do not
+	# code works on SER not AMA
+
+	# check for needles
+	for n in needles:
+		n = n.lower()
+		for p in ports:
+			# first, the AMA->S switch
+			p.device = p.device.replace( "ttyAMA", "ttyS" )
+			p.description = p.description.replace( "ttyAMA", "ttyS" )
+
+			# now look for the needle...
+			# return the device name on the first match
+			if n in p.device.lower():
+				return p.device
+
+			if n in p.description.lower():
+				return p.device
+
+	# nope. didn't find it.
+	return False
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # default args can be used to override when calling main() from an other script
 # e.g to create a miniterm-my-device.py
@@ -814,6 +850,13 @@ def main(default_port=None, default_baudrate=115200, default_rts=None, default_d
         default=default_baudrate)
 
     group = parser.add_argument_group("port settings")
+
+    group.add_argument(
+        "-a", "--autoport",
+        nargs='?',
+        metavar="NEEDLE",
+        help="try to find the correct serial device (overrides port)",
+        default=False)
 
     group.add_argument(
         "--parity",
@@ -934,6 +977,12 @@ def main(default_port=None, default_baudrate=115200, default_rts=None, default_d
     else:
         #filters = ['default']
         filters = ['llvdrv']
+
+    # do the autoport/needle search if applicable
+    if args.autoport != False:
+	tmpPort = bl_find_comport( args.autoport )
+	if tmpPort != None:
+ 		args.port = tmpPort
 
     while True:
         # no port given on command line -> ask user now
