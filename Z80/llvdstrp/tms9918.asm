@@ -49,15 +49,67 @@ C_MAGENTA	= 0x0D
 TMS_Name   = 0x3800    ;   Y     Y     Y     Y
 TMS_Color  = 0x2000    ;   Y     Y     -     -
 TMS_PatTab = 0x0000    ;   Y     Y     Y     Y
-TMS_SprAtt = 0x3F80    ;   Y     Y     Y     -
+TMS_SprAtt = 0x3F00    ;   Y     Y     Y     -
 TMS_SprPat = 0x1800    ;   Y     Y     Y     -
+;  M1, M2, M3              M0    M3    M2    M1
 
 .if( tmsGfxModes )
-; Graphics I Mode
-TMS_GFX1: 	.byte 0x00, 0xC0, 0x0E, 0x80, 0x00, 0x7F, 0x03, C_BLACK
-TMS_GFX2: 	.byte 0x02, 0xC2, 0x0E, 0xFF, 0x00, 0x7F, 0x03, C_WHITE
-TMS_MCOL: 	.byte 0x00, 0xCB, 0x0E,    0, 0x00, 0x7F, 0x03, C_LBLUE
-TMS_TEXT:   .byte 0x00, 0xD0, 0x0E,    0, 0x00,    0,    0, (C_WHITE<<4)|C_DGREEN
+
+TMS_GFX1:
+	.byte 0x00
+	.byte TR_ME16 | TR_S8 | TR_INTD | TR_DISE
+	.byte 0x0E, 0x80, 0x00, 0x7E, 0x03 ; memory mapping
+	.byte C_BLACK
+
+TMS_GFX2:
+	.byte TR_M3
+	.byte TR_ME16 | TR_S16 | TR_INTD | TR_DISE
+	.byte 0x0E, 0xFF, 0x03, 0x7E, 0x03 ; memory mapping
+	.byte C_WHITE
+
+TMS_MCOL:
+	.byte 0x00
+	.byte TR_M2 | TR_ME16 | TR_SMAG | TR_S16 | TR_INTD | TR_DISE
+	.byte 0x0E,    0, 0x00, 0x7E, 0x03 ; memory mapping
+	.byte C_LBLUE
+
+TMS_TEXT:
+	.byte 0x00
+	.byte TR_M1 | TR_ME16 | TR_INTD | TR_DISE
+	.byte 0x0E,    0, 0x00,    0,    0 ; memory mapping
+	.byte (C_WHITE<<4)|C_DGREEN
+
+; Register 0:
+;	0x02 	M3 bit
+TR_M3   = 0x02
+
+; Register 1:
+;   0x01    Sprite Mag:  0x01: sprites scaled x2, 0x00: no mag
+TR_SMAG = 0x01
+
+;   0x02    Sprite Size: 0x02: 16x16 sprites, 0x00: 8x8 sprites
+TR_S8   = 0x00
+TR_S16  = 0x02
+
+;   0x04    Reserved.  0x00
+;   0x08    M2
+TR_M2   = 0x08
+
+;   0x10    M1
+TR_M1   = 0x10 
+
+;   0x20    Interrupts: 0x20: enabled, 0x00: disabled
+TR_INTE = 0x20
+TR_INTD = 0x00
+
+;   0x40    Display Blank:  0x40: Enable display, 0x00: blank display
+TR_DISE = 0x40
+TR_DISB = 0x00
+
+;   0x80    Memory size: 0x80: 16k VRAM, 0x00: 4K VRAM
+TR_ME4  = 0x00
+TR_ME16 = 0x80
+
 
 .endif
 
@@ -137,6 +189,14 @@ _tb:							; FOR B = 0 to b
 	djnz	_tb					; NEXT B 
 
 	ret
+
+; TMSPoke
+;	Sets 1 byte to the value A at address DE
+; DIRTY:
+;	BC, HL
+TMSPoke:
+	ld 		b, #1
+	; fall through....
 
 ; TMSMemSet
 ;
@@ -232,13 +292,13 @@ __d2:
 ;	clear bits of memory for sprite stuff
 TMSClr:
 	ld 		hl, #TMS_SprAtt
-	ld 		b, #(4 * 32)
-	ld 		a, #0
+	ld 		b, #0xFF
+	ld 		a, #0x00
 	call 	TMSMemSet
 
 	ld 		hl, #TMS_Color
-	ld 		b, #32
-	ld 		a, #C_MRED
+	ld 		b, #0xff
+	ld 		a, #C_WHITE
 	call	TMSMemSet
 
 	ret
@@ -269,36 +329,19 @@ TMSTest:
 	ld 		b, #255
 	call 	TMSMemCont			; and again
 
+	ld 		a, #1				; char #2
+	ld 		de, #TMS_Name + 0 	; top left
+	call 	TMSPoke
+	ld 		de, #TMS_Name + 39 	; top right
+	call 	TMSPoke
+	ld 		de, #TMS_Name + 920 ; bot left
+	call 	TMSPoke
+	ld 		de, #TMS_Name + 959 ; bot right
+	call 	TMSPoke
+
+
 	ret
 
-XTMSTest:
-	ld		hl, #TMS_TEXT 		; text mode
-	call	TMSModeSet
-
-	; store our font to the TMS
-	ld		de, #TMS_PatTab		; pattern table is at 0
-	ld 		hl, #TMSFont		; font we want
-	ld  	b, #7 				; 7 glyphs
-	call 	TMSFontPush
-
-	; name table entries (on-screen tilemap)
-	; gfx1 : 32x24 - 768: 0x2ff bytes  (TI 99/4A)
-	; gfx2 : same, but 3 blocks
-	; text : 40x24 - 960: 0x3c0 bytes
-	; multicolor: it's magic.
-
-	ld 		de, #TMS_Name 		; name table (character ram)
-	ld 		a, #3				; shove in this character
-
-	; textmode fill...
-	ld 		b, #255				; this many times
-	call 	TMSMemSet
-	ld 		b, #255
-	call 	TMSMemCont			; and again
-	ld 		b, #255
-	call 	TMSMemCont			; and again
-	ld 		b, #195
-	call 	TMSMemCont			; and again
 
 	; store some data to the tms
 	;ld 		de, #0x0800 		; name table (character ram)
