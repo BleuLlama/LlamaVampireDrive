@@ -25,6 +25,13 @@
         .module LLVD_STRAP
 .area   .CODE (ABS)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Library options
+tmsFontBytes = 1
+tmsGfxModes = 1
+tmsTestText = 0
+tmsTestGfx = 1
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; entry point
@@ -34,10 +41,14 @@
 .org ENTRYORG
 
 usr:
-	; print out a splash
-	push	hl
-	ld		hl,	#t_splash
-	call	Print
+	ld	a, #0x01
+	out	(DigitalIO), a
+	call TMSTest
+
+.if( 0 )
+	;d	a, #C_LGREEN
+	;all 	TMSColor
+
 	pop		hl
 
 	; page swap to all-RAM
@@ -59,16 +70,20 @@ usr:
 	out		(Page_Toggle), a
 	ld 		hl, #t_db1
 	call 	Print
+	ld 	a, #0b00000111
+	out	(DigitalIO), a
 
 	; return to BASIC
 	ld		a, #0x10
 	ld		b, #0x92	; 0x1092 -> 4242.d
+.endif
 	jp		ABPASS
 
 
 t_bootfile:	.asciz "ROMs/boot.bin"
 t_splash:	.asciz "Starting up...\n\r"
-t_db0:		.asciz "RAM bankswitched!\n\r"
-t_db1:		.asciz "And we're back!\n\r"
+;t_db0:		.asciz "RAM bankswitched!\n\r"
+;t_db1:		.asciz "And we're back!\n\r"
 
 .include "toolbox.asm"
+.include "tms9918.asm"

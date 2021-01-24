@@ -2,7 +2,6 @@
 ;
 ;	helper functions for this project
 ;	- Print to ACIA
-;	- TMS core functions
 ; 	- delay routine
 ;	- mini-Llama Vampire Drive interface
 
@@ -18,7 +17,7 @@
 ; LLVD Group 2A (boot loader) interface
 
 LLVD_M_START = 0x1C		; start of message
-LLVD_M_CH0	 = 0x30		; channel 0 (ascii '0')
+LLVD_M_CH0 = 0x30		; channel 0 (ascii '0')
 LLVD_M_END   = 0x07		; end of message
 
 ; commands supported:
@@ -128,59 +127,3 @@ PutCh:
     out 	(ACIA_Data), a   ; echo
     ret
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Video stuff
-
-TMSColor:
-	out		(TMS_Register), a
-	ld		a, #135
-	out		(TMS_Register), a
-	ret
-
-T99GFX1: 	.byte 0, 208, 0, 0, 1, 0, 0, 244
-
-
-
-TMSRegSend:
-	ld 	b,	#8
-	ld 	c,	#0
-	;{
-		gv2:
-			ld		a, (hl)
-			out		(TMS_Register), a
-
-			ld		a, c
-			or		a, #0x80
-			out		(TMS_Register), a
-
-			inc		c
-			inc		hl
-			djnz	gv2
-	; }
-	ret
-
-
-
-; delay of 255*255 is something like 1/10 second or so
-Delay:
-	; {
-		push	af
-		ld		a, #'L
-		out		(ACIA_Data), a
-		pop		af
-	; }
-
-	push	bc
-	ld		b, #255
-__d2:
-	; { 
-		push	bc
-		ld		b, #255
-		djnz	.
-		pop		bc
-		djnz	__d2
-	; }
-	pop		bc
-
-	ret	
