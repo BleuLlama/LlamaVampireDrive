@@ -478,6 +478,8 @@ class LlamaVampireDrive( Transform ):
 
   Utility commands:
     ^Pr                 (r)eset the target via reset_target.py
+    ^P0                 Select Video (0) (RPI composite) via video_select.py
+    ^P1                 Select Video (1) (TMS) via video_select.py
     ^Pb                 (b)oot - LOAD and RUN the program BOOT.BAS
     ^Ph                 Display this (h)elp text (or ^P^H or ^PH etc)
     ^P^P                Send CTRL-P
@@ -667,6 +669,18 @@ class LlamaVampireDrive( Transform ):
     #   do whatever's necessary to reset the target (gpio toggle, etc)
     def cmd_Reset(self, theSerial):
         os.system( "../Tools/reset_target.py" );
+        theSerial.flush()
+
+    # cmd_Video0
+    #   do whatever's necessary to switch to video input 0
+    def cmd_Video0(self, theSerial):
+        os.system( "../Tools/video_select.py 0" );
+        theSerial.flush()
+
+    # cmd_Video1
+    #   do whatever's necessary to switch to video input 1
+    def cmd_Video1(self, theSerial):
+        os.system( "../Tools/video_select.py 1" );
         theSerial.flush()
 
     # handle_user_command
