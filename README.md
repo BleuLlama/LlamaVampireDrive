@@ -362,8 +362,8 @@ This indicates what command is to be used.  Unknown commands
 should be ignored and fail silently.  Here's a list of all of the 
 commands.
 
- - ST:key:value  	- Set a setting value (also the response)
- - GT:key		  	- Get a setting value
+ - ST:key:value		- Set a setting value (also the response)
+ - GT:key			- Get a setting value
 
  - OP:hnd:fn:mode	- open (fn)filename using mode "r" "w" "a", using handle id
  - SK:hnd:pos		- seek to the specified position for the handle id
@@ -380,7 +380,8 @@ commands.
  - CA:filename		- start capture to file
  - CE:				- End capture session
 
- - EE:text			- Echo text back to the target
+ - EE:text			- Echo text back to the target (as-is)
+ - EL:text			- Echo text back to the target (append newline)
 
 
 For set and get, these are the available keys:
@@ -388,7 +389,7 @@ For set and get, these are the available keys:
  - TM	- Current time HHMMSSmmm or HHMMSS, 24 hour time
  - DT	- Current date YYYYMMDD
  - QM	- Quiet Mode (1/0)
- - VI - Version Info
+ - VI	- Version Info
 
 
 ### FIELD SEPARATOR  - : - hex 0x3a - decimal 58 (colon)
