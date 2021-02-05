@@ -25,6 +25,12 @@
 #  The light will come back on after the press
 #  If the Pi is shutting down, it will remail lit until it is 
 #  safe to remove power from the Pi.
+#
+#  To install,
+#  sudo vi /etc/rc.local
+#  and add this line: (change appropriately)
+#    python /home/pi/Tools/gpio_shutdown.py &
+
 
 
 import RPi.GPIO as GPIO
@@ -46,23 +52,35 @@ def Shutdown(channel):
     GPIO.output(led,GPIO.LOW)
     ledIs = 0
 
+    # just ignore the first .2 sec (cheapo-debounce)
     while time.time() - start_time < 0.2:
         pass
+
+    state = "idle"
     
+    # Button is pressed...
     while GPIO.input( button ) == 0:
+	# while the button is pressed
         duration = time.time() - start_time
-        if duration > 5.0 and ledIs == 0:
-            # cancelled
-            GPIO.output(led,GPIO.HIGH)
-            ledIs = 1
+
+	# after 5 seconds, it's cancel time, light off
+        if duration > 5.0 and ledIs == 1:
+            # cancel time
+            GPIO.output(led,GPIO.LOW)
+            ledIs = 0
+            state = "cancel"
+
+	# after 1 second, it's valid reboot time.  light on
+	elif duration > 1.0 and ledIs == 0:
+	    GPIO.output(led,GPIO.HIGH)
+	    ledIs = 1
+            state = "action"
+
         pass
 
     GPIO.output(led,GPIO.HIGH)
     duration = time.time() - start_time
-    if duration < 1:
-        return # ignored
-
-    if ledIs == 0:
+    if state == "action":
         flash( 0.1 )
         os.system("sync")
         os.system("shutdown -h now")

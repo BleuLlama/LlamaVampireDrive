@@ -478,8 +478,9 @@ class LlamaVampireDrive( Transform ):
 
   Utility commands:
     ^Pr                 (r)eset the target via reset_target.py
-    ^P0                 Select Video (0) (RPI composite) via video_select.py
-    ^P1                 Select Video (1) (TMS) via video_select.py
+    ^P1                 Select no video source via video_select.py
+    ^P1                 Select Video (1) (RPI composite) via video_select.py
+    ^P2                 Select Video (2) (TMS) via video_select.py
     ^Pb                 (b)oot - LOAD and RUN the program BOOT.BAS
     ^Ph                 Display this (h)elp text (or ^P^H or ^PH etc)
     ^P^P                Send CTRL-P
@@ -499,7 +500,7 @@ class LlamaVampireDrive( Transform ):
         sys.stdout.write( '{:>5}/{:<5} {:>3}% '.format( currval, topval, 100*currval/topval))
 
         # graphical output
-        bar_length = 30
+        bar_length = 20
         a = bar_length * currval/topval
         b = bar_length - a 
         sys.stdout.write( '[' + ('='*a) + '.'*b + ']\n\r' )
@@ -671,16 +672,10 @@ class LlamaVampireDrive( Transform ):
         os.system( "../Tools/reset_target.py" );
         theSerial.flush()
 
-    # cmd_Video0
-    #   do whatever's necessary to switch to video input 0
-    def cmd_Video0(self, theSerial):
-        os.system( "../Tools/video_select.py 0" );
-        theSerial.flush()
-
-    # cmd_Video1
+    # cmd_VideoSwitch
     #   do whatever's necessary to switch to video input 1
-    def cmd_Video1(self, theSerial):
-        os.system( "../Tools/video_select.py 1" );
+    def cmd_VideoSwitch(self, theSerial, sourceID):
+        os.system( "../Tools/video_select.py {}".format( sourceID ) );
         theSerial.flush()
 
     # handle_user_command
@@ -731,6 +726,18 @@ class LlamaVampireDrive( Transform ):
 
 
         # Misc general utility
+
+        if c in '0':
+            self.cmd_VideoSwitch( theSerial, 0 )
+            return False
+
+        if c in '1':
+            self.cmd_VideoSwitch( theSerial, 1 )
+            return False
+
+        if c in '2':
+            self.cmd_VideoSwitch( theSerial, 2 )
+            return False
 
         if c in 'rR':
             self.cmd_Reset( theSerial )
