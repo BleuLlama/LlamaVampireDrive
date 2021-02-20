@@ -2,52 +2,76 @@
 #
 #  Simple script to toggle some GPIOs -> relays -> video inputs
 #  
-#  GPIO 17 should be wired to the Video 1 relay
-#  GPIO 27 should be wired to the Video 2 relay
+#  Video 0 is the composite of the RC2014 and should be wired directly
+#  to the outputs
+#
+#  Composite: RC2014 internal video
+#  Aux 1: GPIO 17 should be wired to the Video 1 relay
+#  Aux 2: GPIO 27 should be wired to the Video 2 relay
 #
 
 import RPi.GPIO as GPIO
 import time
+import os
 import sys
 
-select_v1 = 17
-select_v2 = 27
+gpio_aux1 = 17
+gpio_aux2 = 27
 
 whichVideo = 0
 
+# raspi composite video switching
+def Composite_Off():
+	os.system('tvservice -o >/dev/null')
+
+def Composite_On():
+	os.system('tvservice --sdtvon="NTSC 4:3" > /dev/null')
+	os.system('fbset --all -g 320 240 320 240 32 > /dev/null')
+
+# which inputs are to be enabled
+c_enable = False
+a1_enable = False
+a2_enable = False
+
+# no input? turn everything off! 
 if len( sys.argv ) < 2:
-	whichVideo = 0
+	opt = 0
+else :
+	opt = sys.argv[1].lower()
 
-if len( sys.argv ) >= 2:
-	if sys.argv[1] == "1":
-		whichVideo = 1
-	elif sys.argv[1] == "2":
-		whichVideo = 2
-	else:
-		whichVideo = 0
+if   opt=='1' or opt=='c' or opt=='composite' or opt=='raspi':
+	c_enable = True
+elif opt=='2' or opt=='aux2':
+	a1_enable = True
+elif opt=='3' or opt=='aux3':
+	a2_enable = True
+# anything else will turn everything off.
 
+# configure GPIO...
 GPIO.setwarnings(False)
 GPIO.setmode( GPIO.BCM )
 
-#  Running this will...
-
 # switch the pins to output mode...
-GPIO.setup(select_v1, GPIO.OUT)
-GPIO.setup(select_v2, GPIO.OUT)
+GPIO.setup(gpio_aux1, GPIO.OUT)
+GPIO.setup(gpio_aux2, GPIO.OUT)
 
-# and set it low...
-if( whichVideo == 1 ):
-	print "Video 1"
-	GPIO.output(select_v1,GPIO.HIGH)
-	GPIO.output(select_v2,GPIO.LOW)
-elif( whichVideo == 2 ):
-	print "Video 2"
-	GPIO.output(select_v1,GPIO.LOW)
-	GPIO.output(select_v2,GPIO.HIGH)
+# and enable the necessary inputs!
+if( c_enable ):
+	Composite_On()
 else:
-	print "Video Off"
-	GPIO.output(select_v1,GPIO.LOW)
-	GPIO.output(select_v2,GPIO.LOW)
+	Composite_Off()
+
+if( a1_enable ): 
+	GPIO.output(gpio_aux1,GPIO.HIGH)
+else:
+	GPIO.output(gpio_aux1,GPIO.LOW)
+
+if( a2_enable ): 
+	GPIO.output(gpio_aux2,GPIO.HIGH)
+else:
+	GPIO.output(gpio_aux2,GPIO.LOW)
+
+
 
 # and finish it up!
 #GPIO.cleanup()   # if we have cleanup() then it will reset the gpios.  we don't want that.
