@@ -6,8 +6,8 @@
 #
 #  Version / Changelog:
 #
+#  v1.03 - 2021-11-27 - added ttyS0 auto and 'ret' for default
 #  v0.02 - 2021-01-18 - Added -a --autoport for doing the autoport search internally
-#
 #  v0.01 - 2020-11-24 - Initial version
 #            changed default baud rate to 115200
 #
@@ -330,11 +330,28 @@ def ask_for_port():
     """
     sys.stderr.write('\n--- Available ports:\n')
     ports = []
+    hasS0 = False
+
     for n, (port, desc, hwid) in enumerate(sorted(comports()), 1):
-        sys.stderr.write('--- {:2}: {:20} {!r}\n'.format(n, port, desc))
+        sys.stderr.write('---    {:2}: {:20} {!r}\n'.format(n, port, desc))
         ports.append(port)
+
+        if desc == 'ttyAMA0':
+            portzz = '/dev/ttyS0'
+            sys.stderr.write('--- [RET]: {:20} {!r} (default)\n'.format(portzz, 'ttyS0'))
+            ports.append(portzz)
+            hasS0 = True
+
     while True:
-        port = raw_input('--- Enter port index or full name: ')
+        if hasS0:
+            port = raw_input('--- Enter port index, full name or return for default: ')
+        else:
+            port = raw_input('--- Enter port index or full name: ')
+        
+        if port == "":
+            print( "Using default (ttyS0)." )
+            port = '/dev/ttyS0'
+
         try:
             index = int(port) - 1
             if not 0 <= index < len(ports):
@@ -980,9 +997,9 @@ def main(default_port=None, default_baudrate=115200, default_rts=None, default_d
 
     # do the autoport/needle search if applicable
     if args.autoport != False:
-	tmpPort = bl_find_comport( args.autoport )
-	if tmpPort != None:
- 		args.port = tmpPort
+        tmpPort = bl_find_comport( args.autoport )
+        if tmpPort != None:
+            args.port = tmpPort
 
     while True:
         # no port given on command line -> ask user now

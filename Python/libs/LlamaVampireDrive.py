@@ -5,6 +5,8 @@
 #
 #   Scott Lawrence - yorgle@gmail.com
 #
+#   1.03 2021-11-27     python warning cleanups
+#   1.02 2021-02-05     Video source switching
 #   1.01 2020-11-30     Textfile commands (capture, type)
 #   1.00 2020-11-28     Initial version, BASIC commands
 #
@@ -34,7 +36,7 @@ class LlamaVampireDrive( Transform ):
     # version of the implementation here.
 
     def __init__(self):
-        self.version = "PY-LLVD v1.01 2020-11-30"
+        self.version = "PY-LLVD v1.03 2021-11-27"
 
         self.basic_filepath = 'FS/BASIC/'
         self.basic_filename = 'SAVED.BAS'
@@ -180,10 +182,19 @@ class LlamaVampireDrive( Transform ):
 
         return text
 
+
+    ################################################################
     # --------------------------------------------
     # handlers for stuff from the target...
     # --------------------------------------------
 
+    def dmp( self, data ):
+        for d in data:
+            print( "{} {}".format( d, ord(d)))
+
+    def sendResponse( self, response ):
+        #r2 = chr( self.msg_start) + response.encode('utf-8') + chr( self.msg_end)
+        self.theSerial.write( chr( self.msg_start) + response.encode('utf-8') + chr( self.msg_end))
 
     def cmd_Set( self, args ):
         key = args[0]
@@ -200,7 +211,6 @@ class LlamaVampireDrive( Transform ):
 
         # NOTE: time and date are ignored for this implementation.
 
-
     def cmd_Get( self, args ):
         key = args[0]
         value = ''
@@ -216,7 +226,7 @@ class LlamaVampireDrive( Transform ):
             value = self.VARS[ key ]
 
         # send out the results to the target
-        self.theSerial.write( ("ST:" + key + ":" + value).encode('utf-8') )
+        self.sendResponse( "ST:" + key + ":" + value )
 
 
     def cmd_FileOpen( self, args ):
@@ -228,30 +238,30 @@ class LlamaVampireDrive( Transform ):
         mode = args[2]
 
         if not path.exists( fullfpath ):
-            print "ERROR:  {}: File does not exist!".format( fullfpath )
+            print( "ERROR:  {}: File does not exist!".format( fullfpath ))
             return
 
-        print "OPEN {} FOR {} AS {}".format( fname, mode, handle )
+        print( "OPEN {} FOR {} AS {}".format( fname, mode, handle ))
 
         try:
             self.FILES[ handle ] = open( fullfpath, mode+"b" )
 
         except IOError:
-            print "ERROR:  {}: IO Error opening file.".format( fullfpath )
+            print( "ERROR:  {}: IO Error opening file.".format( fullfpath ))
         except OSError:
-            print "ERROR:  {}: Error opening file.".format( fullfpath )
+            print( "ERROR:  {}: Error opening file.".format( fullfpath ))
 
     def cmd_FileClose( self, args ):
         handle = args[0]
-        print "FILECLOSE #{}".format( handle )
-        self.FILES[ handle ].close();
+        print( "FILECLOSE #{}".format( handle ))
+        self.FILES[ handle ].close()
         self.FILES[ handle ] = False
 
     def cmd_FileTell( self, args ):
         handle = args[0]
         value = self.FILES[ handle ].tell()
         self.userprint( "FILETELL #{} -> {}".format( handle, value ))
-        self.theSerial.write( ("FT:" + handle + ":" + value).encode('utf-8') )
+        self.sendResponse( "FT:" + handle + ":" + value )
 
 
     def cmd_FileSeek( self, args ):
@@ -265,7 +275,25 @@ class LlamaVampireDrive( Transform ):
 
 
     def cmd_ReadHex( self, args ):
-        self.userprint( "Read Hex: " + ', '.join( args ))
+        handle = args[0]
+        reqcount = int( args[1] )
+        self.userprint( "Read Hex: FH {}, {} bytes requested"
+                .format( handle, reqcount ))
+
+        # read the data
+        data = self.FILES[ handle ].read( reqcount )
+
+        # format the response
+        response = 'RH:{}:{}:'.format( handle, format( len( data ), "x" ))
+
+        # build the response bytes
+        idx = 0
+        for c in data:
+            response = response + c.encode("hex")
+            idx = idx+1
+
+        # send them back
+        self.sendResponse( response )
 
 
     def cmd_WriteHex( self, args ):
@@ -294,7 +322,7 @@ class LlamaVampireDrive( Transform ):
         track = args[1]
         sector = args[2]
 
-        self.userprint( "SEC RD D{} T{} S{}".format( disk, track, sector ) )
+        self.userprint( "SEC RD D{} T{} S{}".format( drive, track, sector ) )
 
 
     def cmd_WriteSector( self, args ):
@@ -302,7 +330,7 @@ class LlamaVampireDrive( Transform ):
         track = args[1]
         sector = args[2]
         data = args[3]
-        self.userprint( "SEC WR D{} T{} S{} {}".format( disk, track, sector, data ) )
+        self.userprint( "SEC WR D{} T{} S{} {}".format( drive, track, sector, data ) )
 
 
     def cmd_CaptureStart( self, args ):
@@ -313,6 +341,9 @@ class LlamaVampireDrive( Transform ):
     def cmd_CaptureEnd( self, args ):
         self.userprint( "CAPTURE END" )
 
+    def cmd_VideoSwitchTarg( self, args ):
+        content = args[ 0 ].encode('utf-8')
+        os.system( "../Tools/video_select.py {}".format( content ) );
 
     # cmd_Echoback
     #   send text back to the user
@@ -323,6 +354,7 @@ class LlamaVampireDrive( Transform ):
         if withNl:
             self.theSerial.write('\x0a\x0d' )
 
+    ################################################################
 
     def handle_vampire_command( self, cmdlist ):
         device = cmdlist[0]
@@ -398,6 +430,10 @@ class LlamaVampireDrive( Transform ):
             self.cmd_Echoback( args, True )
             return
 
+        if command == 'RV':
+            self.cmd_VideoSwitchTarg( args )
+            return
+
         self.userprint( 'VMPCMD? ' + ','.join( self.vampire_message ))
 
 
@@ -427,7 +463,7 @@ class LlamaVampireDrive( Transform ):
 
     def setBasicFilename( self, filename ):
         if filename == "":
-            return false
+            return False
         self.basic_filename = filename
         return filename
 
@@ -478,9 +514,9 @@ class LlamaVampireDrive( Transform ):
 
   Utility commands:
     ^Pr                 (r)eset the target via reset_target.py
-    ^P1                 Select no video source via video_select.py
-    ^P1                 Select Video (1) (RPI composite) via video_select.py
-    ^P2                 Select Video (2) (TMS) via video_select.py
+    ^P0                 Select no video source via video_select.py 0
+    ^P1                 Select Video (1) (terminal) via video_select.py 1
+    ^P2                 Select Video (2) (graphics) via video_select.py 2
     ^Pb                 (b)oot - LOAD and RUN the program BOOT.BAS
     ^Ph                 Display this (h)elp text (or ^P^H or ^PH etc)
     ^P^P                Send CTRL-P
@@ -500,7 +536,7 @@ class LlamaVampireDrive( Transform ):
         sys.stdout.write( '{:>5}/{:<5} {:>3}% '.format( currval, topval, 100*currval/topval))
 
         # graphical output
-        bar_length = 20
+        bar_length = 21
         a = bar_length * currval/topval
         b = bar_length - a 
         sys.stdout.write( '[' + ('='*a) + '.'*b + ']\n\r' )
@@ -592,12 +628,12 @@ class LlamaVampireDrive( Transform ):
         #filenames.sort()
 
         for fn in sorted( dirnames, key=lambda s: s.lower() ):
-            print "    {:>3} {:>5} {}/".format( '~', 'DIR', fn )
+            print( "    {:>3} {:>5} {}/".format( '~', 'DIR', fn ))
 
         idx = 0
         for fn in sorted( filenames, key=lambda s: s.lower() ):
             fs = os.stat( self.basic_filepath + fn ).st_size
-            print "    {:>3} {:>5} {}".format( idx, fs, fn )
+            print( "    {:>3} {:>5} {}".format( idx, fs, fn ))
             idx = idx+1
 
 
@@ -628,7 +664,7 @@ class LlamaVampireDrive( Transform ):
                 self.progress_line( total, fs )
 
                 self.passthru = False
-                theSerial.write( "\x03\x0a\x0dNEW\x0a\x0d" );
+                theSerial.write( "\x03\x0a\x0dNEW\x0a\x0d" )
                 delay( 100 )
 
                 delayCount = 0
@@ -669,19 +705,19 @@ class LlamaVampireDrive( Transform ):
     # cmd_Reset
     #   do whatever's necessary to reset the target (gpio toggle, etc)
     def cmd_Reset(self, theSerial):
-        os.system( "../Tools/reset_target.py" );
+        os.system( "../Tools/reset_target.py" )
         theSerial.flush()
 
     # cmd_VideoSwitch
     #   do whatever's necessary to switch to video input 1
-    def cmd_VideoSwitch(self, theSerial, sourceID):
-        os.system( "../Tools/video_select.py {}".format( sourceID ) );
+    def cmd_VideoSwitch(self, theSerial, sourceID ):
+        os.system( "../Tools/video_select.py {}".format( sourceID ) )
         theSerial.flush()
 
     # handle_user_command
     #   handle input from the user terminal while in LLVD mode
     def handle_user_command( self, c, theSerial ):
-        print c
+        print ( c )
 
         # Utility Commands
         if c in 'vV':
